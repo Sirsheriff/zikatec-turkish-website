@@ -110,9 +110,38 @@ form?.addEventListener("submit", (event) => {
     return;
   }
 
+  const data = new FormData(form);
+  const rows = [
+    ["Ad Soyad", data.get("fullName")],
+    ["Telefon", data.get("phone")],
+    ["Şehir", data.get("city")],
+    ["İşletme / sektör", data.get("industry")],
+    ["Yaklaşık alan", data.get("area") ? `${data.get("area")} m²` : ""],
+    ["Alan ve ihtiyaç", data.get("message")],
+  ]
+    .filter(([, value]) => String(value || "").trim())
+    .map(([label, value]) => `${label}: ${String(value).trim()}`);
+
+  const message = [
+    "Merhaba Zikatec,",
+    "",
+    "Endüstriyel hava soğutucu için ön değerlendirme talep ediyorum.",
+    "",
+    ...rows,
+  ].join("\n");
+  const whatsappUrl = `https://wa.me/982190009195?text=${encodeURIComponent(message)}`;
+  const whatsappLink = document.createElement("a");
+
+  whatsappLink.href = whatsappUrl;
+  whatsappLink.target = "_blank";
+  whatsappLink.rel = "noopener noreferrer";
+  document.body.appendChild(whatsappLink);
+  whatsappLink.click();
+  whatsappLink.remove();
+
   if (formStatus) {
     formStatus.classList.add("is-notice");
     formStatus.textContent =
-      "Bilgileriniz doğrulandı ancak online gönderim henüz aktif değil; verileriniz kaydedilmedi. Lütfen telefon veya WhatsApp üzerinden bize ulaşın.";
+      "WhatsApp açıldı. Mesajı kontrol edip göndererek talebinizi iletebilirsiniz.";
   }
 });

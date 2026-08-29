@@ -292,7 +292,7 @@ p {
 h1 {
   margin: 0;
   color: var(--ink);
-  font-size: clamp(3.8rem, 6.5vw, 7rem);
+  font-size: clamp(3.6rem, 5.4vw, 6.25rem);
   font-weight: 700;
   letter-spacing: -0.06em;
   line-height: 0.92;
@@ -302,9 +302,17 @@ h1 span {
   color: var(--blue-dark);
 }
 
+.hero__support {
+  margin: 1.5rem 0 0;
+  color: var(--blue-dark);
+  font-size: clamp(0.95rem, 1.25vw, 1.1rem);
+  font-weight: 700;
+  line-height: 1.55;
+}
+
 .hero__copy {
   max-width: 590px;
-  margin: 2rem 0 0;
+  margin: 0.7rem 0 0;
   color: var(--graphite);
   font-size: clamp(1rem, 1.25vw, 1.16rem);
   line-height: 1.75;
@@ -541,12 +549,13 @@ h1 span {
 }
 
 .impact-item strong {
-  font-size: clamp(2.4rem, 4vw, 4rem);
-  letter-spacing: -0.05em;
+  font-size: clamp(1.55rem, 2.4vw, 2.4rem);
+  letter-spacing: -0.035em;
+  line-height: 1.1;
 }
 
 .impact-item span {
-  max-width: 170px;
+  max-width: 220px;
   color: rgba(255, 255, 255, 0.76);
   font-size: 0.78rem;
   line-height: 1.5;
@@ -908,6 +917,23 @@ h1 span {
   margin: 0;
   font-size: 0.8rem;
   font-weight: 700;
+  text-align: right;
+}
+
+.product-note {
+  max-width: 980px;
+  margin: 2.5rem 0 0;
+  padding: 1.1rem 1.25rem;
+  border-left: 3px solid var(--blue-dark);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  color: var(--graphite);
+  background: #eef7fb;
+  font-size: 0.86rem;
+  line-height: 1.7;
+}
+
+.product-note strong {
+  color: var(--ink);
 }
 
 .comparison {
@@ -1246,8 +1272,8 @@ label.has-error textarea {
 .form-status.is-notice {
   padding: 0.75rem;
   border-radius: 9px;
-  color: #5c4800;
-  background: #fff6cc;
+  color: var(--blue-deep);
+  background: #e5f5fc;
 }
 
 .site-footer {
@@ -1289,6 +1315,14 @@ label.has-error textarea {
 .footer__links a:hover,
 .footer__contact a:hover {
   color: var(--blue);
+}
+
+.footer__disclaimer {
+  margin-top: -1rem;
+  padding-bottom: 2rem;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 0.72rem;
+  line-height: 1.65;
 }
 
 .footer__bottom {
@@ -1440,7 +1474,7 @@ label.has-error textarea {
   }
 
   h1 {
-    font-size: clamp(3.5rem, 11vw, 6rem);
+    font-size: clamp(3.25rem, 9vw, 5.25rem);
   }
 
   .hero__visual {
@@ -1535,7 +1569,7 @@ label.has-error textarea {
   }
 
   h1 {
-    font-size: clamp(3.15rem, 16vw, 4.6rem);
+    font-size: clamp(2.8rem, 13vw, 4rem);
   }
 
   .hero__copy {
@@ -1580,7 +1614,7 @@ label.has-error textarea {
   }
 
   .impact-item strong {
-    font-size: 2.7rem;
+    font-size: 1.65rem;
   }
 
   .about h2,
