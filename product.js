@@ -1,3 +1,11 @@
+function buildPhotoGallery(model, folder, files) {
+  return files.map((file, index) => ({
+    src: `assets/images/${folder}/${file}`,
+    alt: `${model} endüstriyel hava soğutucu ürün görünümü ${index + 1}`,
+    label: `Ürün görünümü ${index + 1}`,
+  }));
+}
+
 const productData = {
   "zika-350": {
     id: "zika-350",
@@ -14,6 +22,17 @@ const productData = {
         alt: "ZIKA 350 endüstriyel hava soğutucu ön görünümü",
         label: "Ön görünüm",
       },
+      ...buildPhotoGallery("ZIKA 350", "zika 350", [
+        "DSS09553.jpg",
+        "DSS09556.jpg",
+        "DSS09558.jpg",
+        "DSS09558_label removed.jpg",
+        "DSS09560.jpg",
+        "DSS09560_label removed.jpg",
+        "DSS09561.jpg",
+        "DSS09563.jpg",
+        "DSS09563_arrow removed.jpg",
+      ]),
     ],
     specs: {
       airflow: "22.000 m³/h",
@@ -93,6 +112,25 @@ const productData = {
         alt: "ZIKA 700 endüstriyel hava soğutucu ön görünümü",
         label: "Ön görünüm",
       },
+      ...buildPhotoGallery("ZIKA 700", "zika 700", [
+        "DSC04724-1.jpg",
+        "DSC04724.jpg",
+        "DSC04729-1.jpg",
+        "DSC04729.jpg",
+        "DSC04791.jpg",
+        "DSC04807.jpg",
+        "DSC04820.jpg",
+        "DSC04829.jpg",
+        "DSC04841.jpg",
+        "DSC04842.jpg",
+        "DSC04849.jpg",
+        "DSC04864.jpg",
+        "DSC04871.jpg",
+        "DSC05148.jpg",
+        "DSC05162.jpg",
+        "DSC05165.jpg",
+        "DSC05170.jpg",
+      ]),
     ],
     specs: {
       airflow: "Yaklaşık 45.000 m³/h",
@@ -214,7 +252,7 @@ function renderGallery() {
     .map(
       (item, index) => `
         <button type="button" data-gallery-index="${index}" aria-label="${item.label}" aria-pressed="${index === 0}">
-          <img src="${item.src}" alt="" loading="lazy" />
+          <img src="${item.src}" alt="" loading="lazy" decoding="async" />
         </button>
       `,
     )

@@ -1344,6 +1344,44 @@ label.has-error textarea {
   color: var(--blue);
 }
 
+.footer__social {
+  display: grid;
+  width: min(100%, 280px);
+  margin-top: 0.5rem;
+  gap: 0.65rem;
+}
+
+.footer__social > a {
+  display: flex;
+  min-width: 220px;
+  padding: 0.7rem 0.8rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.035);
+  transition: border-color 160ms ease, background-color 160ms ease, transform 160ms ease;
+}
+
+.footer__social > a:hover,
+.footer__social > a:focus-visible {
+  border-color: rgba(0, 161, 228, 0.55);
+  color: var(--white);
+  background: rgba(0, 161, 228, 0.1);
+  transform: translateY(-2px);
+}
+
+.footer__social span {
+  color: rgba(255, 255, 255, 0.52);
+  font-size: 0.68rem;
+}
+
+.footer__social strong {
+  color: var(--white);
+  font-size: 0.74rem;
+}
+
 .footer__disclaimer {
   margin-top: -1rem;
   padding-bottom: 2rem;
