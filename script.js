@@ -94,7 +94,7 @@ form?.querySelectorAll("input, select, textarea").forEach((field) => {
   });
 });
 
-form?.addEventListener("submit", (event) => {
+form?.addEventListener("submit", async (event) => {
   event.preventDefault();
 
   const fields = [...form.querySelectorAll("input, select, textarea")];
@@ -111,6 +111,15 @@ form?.addEventListener("submit", (event) => {
   }
 
   const data = new FormData(form);
+  const submitButton = form.querySelector('[type="submit"]');
+  const payload = {
+    fullName: data.get("fullName"),
+    phone: data.get("phone"),
+    city: data.get("city"),
+    industry: data.get("industry"),
+    area: data.get("area"),
+    message: data.get("message"),
+  };
   const rows = [
     ["Ad Soyad", data.get("fullName")],
     ["Telefon", data.get("phone")],
@@ -139,9 +148,30 @@ form?.addEventListener("submit", (event) => {
   whatsappLink.click();
   whatsappLink.remove();
 
+  submitButton.disabled = true;
+  let saved = false;
+
+  if (location.protocol === "http:" || location.protocol === "https:") {
+    try {
+      const response = await fetch("api.php?action=create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      saved = response.ok;
+    } catch {
+      saved = false;
+    }
+  }
+
   if (formStatus) {
     formStatus.classList.add("is-notice");
-    formStatus.textContent =
-      "WhatsApp açıldı. Mesajı kontrol edip göndererek talebinizi iletebilirsiniz.";
+    formStatus.textContent = saved
+      ? "Talebiniz kaydedildi ve WhatsApp açıldı. Mesajı kontrol edip gönderebilirsiniz."
+      : location.protocol === "file:"
+        ? "WhatsApp açıldı. Yönetim paneline kayıt yalnızca yayınlanmış site üzerinde çalışır."
+        : "WhatsApp açıldı ancak talep panele kaydedilemedi. Lütfen mesajı WhatsApp üzerinden gönderin.";
   }
+
+  submitButton.disabled = false;
 });

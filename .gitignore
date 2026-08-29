@@ -1,0 +1,6 @@
+# Runtime consultation records and credentials contain personal data.
+.data/
+admin-config.php
+
+# Local verification artifacts.
+tmp/admin-api-test.json

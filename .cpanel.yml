@@ -1,5 +1,4 @@
 ---
 deployment:
   tasks:
-    - export DEPLOYPATH=/home3/zikatecn/public_html/
-    - /bin/cp -R ./ $DEPLOYPATH
+    - /bin/bash ./deploy.sh

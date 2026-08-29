@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="tr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>Zikatec | Talep Yönetimi</title>
+    <link rel="icon" href="assets/images/zikatec-logo.png" type="image/png" />
+    <link rel="stylesheet" href="admin.css" />
+  </head>
+  <body>
+    <main class="admin-shell">
+      <section class="login-card" data-login-view>
+        <a class="brand" href="index.html" aria-label="Zikatec ana sayfa">
+          <img src="assets/images/zikatec-logo.png" alt="Zikatec" />
+        </a>
+        <p class="eyebrow">YÖNETİM PANELİ</p>
+        <h1>Danışmanlık taleplerini görüntüleyin</h1>
+        <p class="login-card__copy">Bu alan yalnızca yetkili kullanıcılar içindir.</p>
+
+        <div class="server-warning" data-server-warning hidden>
+          Bu panel doğrudan dosya olarak açılamaz. Yayınlanmış web sitesi adresindeki <code>/admin.html</code> sayfasını açın.
+        </div>
+
+        <form class="login-form" data-login-form>
+          <label>
+            <span>Kullanıcı adı</span>
+            <input name="username" autocomplete="username" required />
+          </label>
+          <label>
+            <span>Parola</span>
+            <input type="password" name="password" autocomplete="current-password" required />
+          </label>
+          <button type="submit">Giriş yap</button>
+          <p class="form-message" role="status" data-login-message></p>
+        </form>
+      </section>
+
+      <section class="dashboard" data-dashboard hidden>
+        <header class="dashboard-header">
+          <div class="dashboard-brand">
+            <img src="assets/images/zikatec-logo.png" alt="" />
+            <div>
+              <p class="eyebrow">ZIKATEC TÜRKİYE</p>
+              <h1>Ön değerlendirme talepleri</h1>
+            </div>
+          </div>
+          <div class="dashboard-header__actions">
+            <span data-admin-name></span>
+            <a href="index.html">Siteye dön</a>
+            <button type="button" class="button-secondary" data-logout>Çıkış yap</button>
+          </div>
+        </header>
+
+        <div class="stats" aria-label="Talep özeti">
+          <article><span>Toplam talep</span><strong data-stat-total>0</strong></article>
+          <article><span>Yeni</span><strong data-stat-new>0</strong></article>
+          <article><span>İletişime geçildi</span><strong data-stat-contacted>0</strong></article>
+        </div>
+
+        <div class="toolbar">
+          <label class="search-field">
+            <span class="sr-only">Taleplerde ara</span>
+            <input type="search" placeholder="Ad, telefon, şehir veya mesajda ara..." data-search />
+          </label>
+          <label class="filter-field">
+            <span>Durum</span>
+            <select data-status-filter>
+              <option value="all">Tümü</option>
+              <option value="new">Yeni</option>
+              <option value="contacted">İletişime geçildi</option>
+              <option value="closed">Kapatıldı</option>
+            </select>
+          </label>
+          <button type="button" class="button-secondary" data-refresh>Yenile</button>
+        </div>
+
+        <p class="dashboard-message" role="status" data-dashboard-message></p>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Tarih</th>
+                <th>Ad soyad</th>
+                <th>Telefon</th>
+                <th>Şehir / sektör</th>
+                <th>Alan</th>
+                <th>Durum</th>
+                <th><span class="sr-only">Detay</span></th>
+              </tr>
+            </thead>
+            <tbody data-request-list></tbody>
+          </table>
+          <div class="empty-state" data-empty-state hidden>
+            <strong>Gösterilecek talep bulunamadı.</strong>
+            <span>Yeni talepler geldiğinde burada listelenecek.</span>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <dialog class="request-dialog" data-request-dialog>
+      <button type="button" class="dialog-close" data-dialog-close aria-label="Pencereyi kapat">×</button>
+      <p class="eyebrow">TALEP DETAYI</p>
+      <h2 data-detail-name></h2>
+      <div class="detail-grid" data-detail-grid></div>
+      <div class="detail-message">
+        <span>Alan ve ihtiyaç</span>
+        <p data-detail-message></p>
+      </div>
+    </dialog>
+
+    <script src="admin.js" defer></script>
+  </body>
+</html>
