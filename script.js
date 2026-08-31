@@ -65,6 +65,8 @@ faqItems.forEach((item) => {
 
 const form = document.querySelector("[data-lead-form]");
 const formStatus = document.querySelector("[data-form-status]");
+const successDialog = document.querySelector("[data-success-dialog]");
+const successDialogClose = document.querySelector("[data-success-close]");
 
 function validateField(field) {
   const label = field.closest("label");
@@ -120,58 +122,54 @@ form?.addEventListener("submit", async (event) => {
     area: data.get("area"),
     message: data.get("message"),
   };
-  const rows = [
-    ["Ad Soyad", data.get("fullName")],
-    ["Telefon", data.get("phone")],
-    ["Şehir", data.get("city")],
-    ["İşletme / sektör", data.get("industry")],
-    ["Yaklaşık alan", data.get("area") ? `${data.get("area")} m²` : ""],
-    ["Alan ve ihtiyaç", data.get("message")],
-  ]
-    .filter(([, value]) => String(value || "").trim())
-    .map(([label, value]) => `${label}: ${String(value).trim()}`);
-
-  const message = [
-    "Merhaba Zikatec,",
-    "",
-    "Endüstriyel hava soğutucu için ön değerlendirme talep ediyorum.",
-    "",
-    ...rows,
-  ].join("\n");
-  const whatsappUrl = `https://wa.me/982190009195?text=${encodeURIComponent(message)}`;
-  const whatsappLink = document.createElement("a");
-
-  whatsappLink.href = whatsappUrl;
-  whatsappLink.target = "_blank";
-  whatsappLink.rel = "noopener noreferrer";
-  document.body.appendChild(whatsappLink);
-  whatsappLink.click();
-  whatsappLink.remove();
-
   submitButton.disabled = true;
-  let saved = false;
-
-  if (location.protocol === "http:" || location.protocol === "https:") {
-    try {
-      const response = await fetch("api.php?action=create", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      saved = response.ok;
-    } catch {
-      saved = false;
-    }
-  }
-
+  submitButton.setAttribute("aria-busy", "true");
   if (formStatus) {
-    formStatus.classList.add("is-notice");
-    formStatus.textContent = saved
-      ? "Talebiniz kaydedildi ve WhatsApp açıldı. Mesajı kontrol edip gönderebilirsiniz."
-      : location.protocol === "file:"
-        ? "WhatsApp açıldı. Yönetim paneline kayıt yalnızca yayınlanmış site üzerinde çalışır."
-        : "WhatsApp açıldı ancak talep panele kaydedilemedi. Lütfen mesajı WhatsApp üzerinden gönderin.";
+    formStatus.classList.remove("is-notice");
+    formStatus.textContent = "Talebiniz gönderiliyor...";
   }
 
-  submitButton.disabled = false;
+  try {
+    if (location.protocol !== "http:" && location.protocol !== "https:") {
+      throw new Error("Danışmanlık formu yalnızca yayınlanmış site üzerinde kullanılabilir.");
+    }
+
+    const response = await fetch("api.php?action=create", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(result.error || "Talebiniz şu anda gönderilemedi.");
+
+    form.reset();
+    fields.forEach((field) => {
+      field.removeAttribute("aria-invalid");
+      field.closest("label")?.classList.remove("has-error");
+    });
+    if (formStatus) {
+      formStatus.classList.remove("is-notice");
+      formStatus.textContent = "";
+    }
+    document.body.classList.add("modal-open");
+    successDialog?.showModal();
+  } catch (error) {
+    if (formStatus) {
+      formStatus.classList.remove("is-notice");
+      formStatus.textContent = error.message;
+    }
+  } finally {
+    submitButton.disabled = false;
+    submitButton.removeAttribute("aria-busy");
+  }
+});
+
+successDialogClose?.addEventListener("click", () => successDialog.close());
+
+successDialog?.addEventListener("click", (event) => {
+  if (event.target === successDialog) successDialog.close();
+});
+
+successDialog?.addEventListener("close", () => {
+  document.body.classList.remove("modal-open");
 });

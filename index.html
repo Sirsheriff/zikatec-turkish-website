@@ -27,10 +27,19 @@
         "name": "Zikatec",
         "url": "https://zikatec.net/",
         "logo": "https://zikatec.net/assets/images/zikatec-logo.png",
-        "telephone": "+98 21 9000 9195",
         "areaServed": ["TR", "IR"],
         "description": "Fabrika, depo ve üretim alanları için taşınabilir endüstriyel evaporatif hava soğutucuları üreticisi."
       }
+    </script>
+    <script type="text/javascript">
+      (function (c, l, a, r, i, t, y) {
+        c[a] = c[a] || function () { (c[a].q = c[a].q || []).push(arguments); };
+        t = l.createElement(r);
+        t.async = 1;
+        t.src = "https://www.clarity.ms/tag/" + i;
+        y = l.getElementsByTagName(r)[0];
+        y.parentNode.insertBefore(t, y);
+      })(window, document, "clarity", "script", "yawa8ykxxv");
     </script>
   </head>
   <body>
@@ -62,7 +71,7 @@
           <a href="#kullanim-alanlari">Kullanım Alanları</a>
           <a href="#urunler">Modeller</a>
           <a href="#sss">SSS</a>
-          <a class="nav-contact" href="#iletisim">Ön Değerlendirme</a>
+          <a class="nav-contact" href="#iletisim">Ücretsiz Danışmanlık</a>
         </nav>
       </div>
     </header>
@@ -83,8 +92,8 @@
             kullanımla bir araya getirir.
           </p>
           <div class="hero__actions">
-            <a class="button button--primary" href="#iletisim">
-              Alanım için uygun modeli bulun
+            <a class="button button--primary hero__consultation-cta" href="#iletisim">
+              Danışmanlık talebi oluşturun
               <span aria-hidden="true">↗</span>
             </a>
             <a class="button button--ghost" href="#karsilastirma">
@@ -410,30 +419,21 @@
       <section class="contact section-pad" id="iletisim">
         <div class="section-shell contact__grid">
           <div class="contact__content">
-            <p class="section-kicker">Teknik ön değerlendirme</p>
-            <h2>Alanınız için uygun ZIKA modelini birlikte belirleyelim.</h2>
-            <p>Alan türü, hacim ve çalışma koşullarını paylaşın. Talebiniz ekibimizin değerlendirme paneline kaydedilsin ve WhatsApp üzerinden de iletilebilsin.</p>
+            <p class="section-kicker">Ücretsiz danışmanlık talebi</p>
+            <h2><strong>Danışmanlık talebinizi</strong> oluşturun, alanınız için doğru modeli birlikte belirleyelim.</h2>
+            <p>Alan türü, hacim ve çalışma koşullarını paylaşın. Talebiniz doğrudan teknik ekibimizin değerlendirme paneline kaydedilir.</p>
 
-            <div class="contact-methods">
-              <a href="tel:+982190009195">
-                <span>Telefon</span>
-                <strong>+98 21 9000 9195</strong>
-              </a>
-              <a href="https://wa.me/982190009195?text=Merhaba%20Zikatec%2C%20end%C3%BCstriyel%20hava%20so%C4%9Futucu%20i%C3%A7in%20%C3%B6n%20de%C4%9Ferlendirme%20almak%20istiyorum." target="_blank" rel="noopener noreferrer">
-                <span>WhatsApp</span>
-                <strong>Alan bilgilerini paylaşın ↗</strong>
-              </a>
-              <a href="https://zikatec.net/" target="_blank" rel="noopener noreferrer">
-                <span>Web</span>
-                <strong>zikatec.net ↗</strong>
-              </a>
-            </div>
+            <ol class="consultation-steps" aria-label="Danışmanlık talebi süreci">
+              <li><span>01</span><div><strong>Talebinizi iletin</strong><p>Alanınıza ilişkin temel bilgileri form üzerinden paylaşın.</p></div></li>
+              <li><span>02</span><div><strong>Teknik ekip incelesin</strong><p>İhtiyacınız ve saha koşullarınız birlikte değerlendirilsin.</p></div></li>
+              <li><span>03</span><div><strong>Size özel öneri alın</strong><p>Uygun model ve sonraki adımlar için ekibimiz size dönüş yapsın.</p></div></li>
+            </ol>
           </div>
 
           <form class="lead-form" data-lead-form novalidate>
             <div class="lead-form__heading">
-              <h3>Soğutma ihtiyacınızı anlatın</h3>
-              <p>Temel saha bilgileri uygun model seçeneklerini daraltmamıza yardımcı olur. Talebiniz kaydedilir ve hızlı iletişim için WhatsApp açılır.</p>
+              <h3>Danışmanlık talebinizi oluşturun</h3>
+              <p>Temel saha bilgileri uygun model seçeneklerini daraltmamıza yardımcı olur. Formu gönderdiğinizde talebiniz doğrudan ekibimize ulaşır.</p>
             </div>
 
             <div class="form-grid">
@@ -477,12 +477,40 @@
               </label>
             </div>
 
-            <button class="button button--primary lead-form__submit" type="submit">WhatsApp'tan ön değerlendirme isteyin <span aria-hidden="true">↗</span></button>
+            <button class="button button--primary lead-form__submit" type="submit">Danışmanlık talebini gönderin <span aria-hidden="true">↗</span></button>
             <p class="form-status" role="status" aria-live="polite" data-form-status></p>
           </form>
         </div>
       </section>
     </main>
+
+    <dialog class="success-dialog" data-success-dialog aria-labelledby="success-dialog-title" aria-describedby="success-dialog-copy">
+      <button class="success-dialog__close" type="button" data-success-close aria-label="Pencereyi kapat" autofocus>×</button>
+      <div class="success-dialog__mark" aria-hidden="true">✓</div>
+      <p class="success-dialog__eyebrow">TALEBİNİZ ALINDI</p>
+      <h2 id="success-dialog-title">Danışmanlık talebiniz başarıyla kaydedildi.</h2>
+      <p id="success-dialog-copy">Teknik ekibimiz paylaştığınız bilgileri inceleyerek size dönüş yapacaktır.</p>
+
+      <div class="success-dialog__social">
+        <p>Bizi sosyal medyada da takip edin</p>
+        <div>
+          <a href="https://www.instagram.com/zikatec.tr?igsi=MTR0NWFram1xaDFqdw==" target="_blank" rel="noopener noreferrer">
+            <span class="success-dialog__social-icon success-dialog__social-icon--instagram" aria-hidden="true">
+              <img src="https://cdn.simpleicons.org/instagram/FFFFFF" alt="" width="22" height="22" />
+            </span>
+            <span><strong>Instagram</strong><small>@zikatec.tr</small></span>
+            <b aria-hidden="true">↗</b>
+          </a>
+          <a href="https://youtube.com/@zikatec_tr?si=IEpPwrkMavTmWZnH" target="_blank" rel="noopener noreferrer">
+            <span class="success-dialog__social-icon success-dialog__social-icon--youtube" aria-hidden="true">
+              <img src="https://cdn.simpleicons.org/youtube/FFFFFF" alt="" width="22" height="22" />
+            </span>
+            <span><strong>YouTube</strong><small>@zikatec_tr</small></span>
+            <b aria-hidden="true">↗</b>
+          </a>
+        </div>
+      </div>
+    </dialog>
 
     <footer class="site-footer">
       <div class="section-shell footer__grid">
@@ -498,8 +526,10 @@
           <a href="#sss">SSS</a>
         </div>
         <div class="footer__contact">
-          <a href="tel:+982190009195">+98 21 9000 9195</a>
-          <a href="https://zikatec.net/">zikatec.net</a>
+          <a class="footer__consultation" href="#iletisim">
+            <span>Ücretsiz danışmanlık</span>
+            <strong>Talep oluşturun →</strong>
+          </a>
           <div class="footer__social" aria-label="Zikatec sosyal medya hesapları">
             <a href="https://www.instagram.com/zikatec.tr?igsi=MTR0NWFram1xaDFqdw==" target="_blank" rel="noopener noreferrer" aria-label="Zikatec Türkiye Instagram hesabını açın">
               <span class="footer__social-icon footer__social-icon--instagram" aria-hidden="true">
