@@ -231,8 +231,8 @@ img {
   min-height: calc(100vh - 104px);
   padding-block: clamp(3.5rem, 7vh, 7rem);
   align-items: center;
-  grid-template-columns: minmax(0, 0.94fr) minmax(430px, 1.06fr);
-  gap: clamp(2rem, 7vw, 8rem);
+  grid-template-columns: minmax(0, 1.03fr) minmax(430px, 0.97fr);
+  gap: clamp(2rem, 5vw, 6rem);
 }
 
 .hero::before {
@@ -252,7 +252,7 @@ img {
 .hero__content {
   position: relative;
   z-index: 2;
-  max-width: 650px;
+  max-width: 760px;
 }
 
 .eyebrow,
@@ -300,6 +300,22 @@ h1 {
 
 h1 span {
   color: var(--blue-dark);
+}
+
+.hero__title {
+  max-width: 760px;
+  font-size: clamp(3.7rem, 4.25vw, 5.25rem);
+  line-height: 0.94;
+}
+
+.hero__title-line {
+  display: block;
+  white-space: nowrap;
+}
+
+.hero__title-base,
+.hero__title-connector {
+  color: var(--ink);
 }
 
 .hero__support {
@@ -1346,21 +1362,21 @@ label.has-error textarea {
 
 .footer__social {
   display: grid;
-  width: min(100%, 280px);
+  width: min(100%, 300px);
   margin-top: 0.5rem;
   gap: 0.65rem;
 }
 
 .footer__social > a {
-  display: flex;
-  min-width: 220px;
-  padding: 0.7rem 0.8rem;
+  display: grid;
+  min-width: 245px;
+  padding: 0.7rem;
   align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
+  grid-template-columns: 42px 1fr auto;
+  gap: 0.8rem;
   border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.035);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.045);
   transition: border-color 160ms ease, background-color 160ms ease, transform 160ms ease;
 }
 
@@ -1372,14 +1388,58 @@ label.has-error textarea {
   transform: translateY(-2px);
 }
 
-.footer__social span {
-  color: rgba(255, 255, 255, 0.52);
-  font-size: 0.68rem;
+.footer__social-icon {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border-radius: 13px;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18), 0 8px 18px rgba(0, 0, 0, 0.18);
 }
 
-.footer__social strong {
+.footer__social-icon--instagram {
+  background: radial-gradient(circle at 32% 100%, #ffd600 0 20%, #ff7a00 38%, #ff0169 62%, #d300c5 82%, #7638fa 100%);
+}
+
+.footer__social-icon--youtube {
+  background: #ff0033;
+}
+
+.footer__social-icon img {
+  display: block;
+  width: 20px;
+  height: 20px;
+}
+
+.footer__social-copy {
+  display: grid;
+  min-width: 0;
+  gap: 0.15rem;
+}
+
+.footer__social-copy strong {
   color: var(--white);
-  font-size: 0.74rem;
+  font-size: 0.78rem;
+}
+
+.footer__social-copy small {
+  overflow: hidden;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 0.66rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.footer__social-arrow {
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 0.85rem;
+  transition: color 160ms ease, transform 160ms ease;
+}
+
+.footer__social > a:hover .footer__social-arrow,
+.footer__social > a:focus-visible .footer__social-arrow {
+  color: var(--white);
+  transform: translate(2px, -2px);
 }
 
 .footer__disclaimer {
@@ -1430,6 +1490,10 @@ label.has-error textarea {
   .hero {
     grid-template-columns: minmax(0, 1fr) minmax(390px, 0.9fr);
     gap: 2rem;
+  }
+
+  .hero__title {
+    font-size: clamp(3rem, 4.6vw, 3.25rem);
   }
 
   .advantage-grid {
@@ -1542,6 +1606,10 @@ label.has-error textarea {
     font-size: clamp(3.25rem, 9vw, 5.25rem);
   }
 
+  .hero__title {
+    font-size: clamp(3.25rem, 8vw, 4.3rem);
+  }
+
   .hero__visual {
     width: min(100%, 610px);
     min-height: auto;
@@ -1626,6 +1694,21 @@ label.has-error textarea {
 
   .hero {
     padding-block: 3.2rem 4rem;
+  }
+
+  .hero__title {
+    font-size: clamp(2.65rem, 11.5vw, 3.5rem);
+    line-height: 0.98;
+  }
+
+  .hero__title-line {
+    white-space: normal;
+  }
+
+  .footer__social,
+  .footer__social > a {
+    width: 100%;
+    min-width: 0;
   }
 
   .eyebrow,
