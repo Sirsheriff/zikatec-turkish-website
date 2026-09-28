@@ -9,6 +9,8 @@ const searchInput = document.querySelector("[data-search]");
 const statusFilter = document.querySelector("[data-status-filter]");
 const dialog = document.querySelector("[data-request-dialog]");
 let requests = [];
+let csrfToken = "";
+const API_URL = "/api.php";
 
 const statusLabels = {
   new: "Yeni",
@@ -32,11 +34,16 @@ function formatDate(value) {
     : new Intl.DateTimeFormat("tr-TR", { dateStyle: "medium", timeStyle: "short" }).format(date);
 }
 
-async function api(path, options = {}) {
-  const response = await fetch(path, {
-    credentials: "same-origin",
-    headers: { "Content-Type": "application/json", ...(options.headers || {}) },
+async function api(action, options = {}) {
+  const headers = { "Content-Type": "application/json", ...(options.headers || {}) };
+  if (csrfToken && String(options.method || "GET").toUpperCase() !== "GET") {
+    headers["X-CSRF-Token"] = csrfToken;
+  }
+  const response = await fetch(`${API_URL}?action=${encodeURIComponent(action)}`, {
     ...options,
+    credentials: "same-origin",
+    cache: "no-store",
+    headers,
   });
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
@@ -44,10 +51,12 @@ async function api(path, options = {}) {
     error.status = response.status;
     throw error;
   }
+  if (typeof data.csrfToken === "string") csrfToken = data.csrfToken;
   return data;
 }
 
 function setAuthenticated(authenticated, username = "") {
+  if (!authenticated) csrfToken = "";
   loginView.hidden = authenticated;
   dashboard.hidden = !authenticated;
   const adminName = document.querySelector("[data-admin-name]");
@@ -92,7 +101,7 @@ function renderRequests() {
 async function loadRequests() {
   dashboardMessage.textContent = "Talepler yükleniyor...";
   try {
-    const data = await api("api.php?action=list");
+    const data = await api("list");
     requests = data.items || [];
     updateStats();
     renderRequests();
@@ -126,7 +135,7 @@ loginForm?.addEventListener("submit", async (event) => {
   button.disabled = true;
   loginMessage.textContent = "Giriş yapılıyor...";
   try {
-    const result = await api("api.php?action=login", {
+    const result = await api("login", {
       method: "POST",
       body: JSON.stringify({ username: data.get("username"), password: data.get("password") }),
     });
@@ -141,7 +150,7 @@ loginForm?.addEventListener("submit", async (event) => {
 });
 
 document.querySelector("[data-logout]")?.addEventListener("click", async () => {
-  try { await api("api.php?action=logout", { method: "POST" }); } catch {}
+  try { await api("logout", { method: "POST" }); } catch {}
   requests = [];
   setAuthenticated(false);
 });
@@ -162,7 +171,7 @@ requestList?.addEventListener("change", async (event) => {
   if (!select) return;
   select.disabled = true;
   try {
-    await api("api.php?action=status", {
+    await api("status", {
       method: "POST",
       body: JSON.stringify({ id: select.dataset.statusId, status: select.value }),
     });
@@ -185,7 +194,11 @@ async function initialize() {
     return;
   }
   try {
-    const session = await api("api.php?action=session");
+    const session = await api("session");
+    if (!session.authenticated) {
+      setAuthenticated(false);
+      return;
+    }
     setAuthenticated(true, session.username);
     await loadRequests();
   } catch {
