@@ -186,6 +186,15 @@ function chunkFetch(array $config, string $model, array $ids, array $fields): ar
     return $result;
 }
 
+function chunkFetchByField(array $config, string $model, string $field, array $ids, array $fields): array {
+    $result = [];
+    foreach (array_chunk(array_values(array_unique($ids)), 500) as $chunk) {
+        if (!$chunk) continue;
+        array_push($result, ...searchReadAll($config, $model, ['domain' => [[$field, 'in', $chunk]], 'fields' => $fields]));
+    }
+    return $result;
+}
+
 function refId(mixed $value): int {
     if (is_array($value) && isset($value[0])) return (int) $value[0];
     return is_numeric($value) ? (int) $value : 0;
@@ -200,7 +209,7 @@ function synchronize(array $config): array {
     $activities = searchReadAll($config, 'mail.activity', ['domain' => [['res_model','=','crm.lead']], 'fields' => ['id','res_id','user_id','activity_type_id','summary','date_deadline','create_date','active']]);
     $messages = searchReadAll($config, 'mail.message', ['domain' => [['model','=','crm.lead']], 'fields' => ['id','res_id','date','subtype_id','author_id']]);
     $contacts = searchReadAll($config, 'res.partner', ['domain' => [['active','=',true]], 'fields' => ['id','name','create_date','user_id','company_type','parent_id','active']]);
-    $orderLines = chunkFetch($config, 'sale.order.line', array_map(fn($item) => (int) $item['id'], $orders), ['id','order_id','product_id','product_uom_qty','price_unit','discount','price_subtotal','price_total']);
+    $orderLines = chunkFetchByField($config, 'sale.order.line', 'order_id', array_map(fn($item) => (int) $item['id'], $orders), ['id','order_id','product_id','product_uom_qty','price_unit','discount','price_subtotal','price_total']);
     $invoiceLineIds = [];
     foreach ($invoices as $invoice) foreach (($invoice['invoice_line_ids'] ?? []) as $id) $invoiceLineIds[] = (int) $id;
     $invoiceLines = chunkFetch($config, 'account.move.line', $invoiceLineIds, ['id','move_id','product_id','quantity','price_subtotal','price_total','sale_line_ids']);
