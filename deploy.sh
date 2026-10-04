@@ -5,6 +5,8 @@ DEPLOY_PATH="/home3/zikatecn/public_html"
 MANAGEMENT_PATH="$DEPLOY_PATH/systemManagement"
 CONSULTATION_PATH="$DEPLOY_PATH/consultationManagement"
 PRIVATE_PATH="/home3/zikatecn/zikatec-private"
+COOLERPAROON_PATH="$DEPLOY_PATH/game/coolerparoon"
+COOLERPAROON_PRIVATE_PATH="$PRIVATE_PATH/coolerparoon"
 
 PHP_BIN="$(command -v php || true)"
 if [[ -z "$PHP_BIN" ]]; then
@@ -18,9 +20,10 @@ if [[ -z "$PHP_BIN" ]]; then
 fi
 "$PHP_BIN" -l ./api.php
 "$PHP_BIN" -l ./systemManagement/api.php
+"$PHP_BIN" -l ./game/coolerparoon/api.php
 
-/bin/mkdir -p "$DEPLOY_PATH" "$MANAGEMENT_PATH" "$CONSULTATION_PATH" "$PRIVATE_PATH"
-/bin/chmod 700 "$PRIVATE_PATH"
+/bin/mkdir -p "$DEPLOY_PATH" "$MANAGEMENT_PATH" "$CONSULTATION_PATH" "$PRIVATE_PATH" "$COOLERPAROON_PATH" "$COOLERPAROON_PRIVATE_PATH"
+/bin/chmod 700 "$PRIVATE_PATH" "$COOLERPAROON_PRIVATE_PATH"
 
 if [[ ! -f "$PRIVATE_PATH/config.php" ]]; then
   /bin/cp ./private-config.example.php "$PRIVATE_PATH/config.php"
@@ -38,6 +41,16 @@ fi
   ./admin.html \
   ./api.php \
   "$DEPLOY_PATH/"
+
+/bin/cp -R ./game/coolerparoon/assets "$COOLERPAROON_PATH/"
+/bin/cp -f \
+  ./game/coolerparoon/.htaccess \
+  ./game/coolerparoon/index.html \
+  ./game/coolerparoon/style.css \
+  ./game/coolerparoon/game.js \
+  ./game/coolerparoon/difficulty.js \
+  ./game/coolerparoon/api.php \
+  "$COOLERPAROON_PATH/"
 
 /bin/rm -rf "$MANAGEMENT_PATH/assets" "$MANAGEMENT_PATH/fonts"
 /bin/cp -R ./systemManagement/assets "$MANAGEMENT_PATH/assets"
@@ -74,3 +87,6 @@ fi
   "$CONSULTATION_PATH/.htaccess" \
   "$CONSULTATION_PATH/admin.css" \
   "$CONSULTATION_PATH/admin.js"
+
+/bin/find "$COOLERPAROON_PATH" -type d -exec /bin/chmod 755 {} +
+/bin/find "$COOLERPAROON_PATH" -type f -exec /bin/chmod 644 {} +

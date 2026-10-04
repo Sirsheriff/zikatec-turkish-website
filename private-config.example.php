@@ -16,4 +16,8 @@ return [
     'odoo_api_key' => 'CHANGE_ME',
     'odoo_device_product_ids' => [],
     'odoo_device_category_ids' => [],
+    // SMS.ir verification for Cooler Paroon. Keep real values in private config only.
+    'smsir_api_key' => '',
+    'smsir_template_id' => '',
+    'smsir_template_parameter' => 'CODE',
 ];
