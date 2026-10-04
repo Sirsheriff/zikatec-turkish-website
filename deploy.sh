@@ -30,6 +30,11 @@ if [[ ! -f "$PRIVATE_PATH/config.php" ]]; then
   /bin/chmod 600 "$PRIVATE_PATH/config.php"
 fi
 
+if [[ ! -f "$COOLERPAROON_PRIVATE_PATH/config.php" ]]; then
+  /bin/cp ./game/coolerparoon/config.example.php "$COOLERPAROON_PRIVATE_PATH/config.php"
+  /bin/chmod 600 "$COOLERPAROON_PRIVATE_PATH/config.php"
+fi
+
 /bin/cp -R ./assets "$DEPLOY_PATH/"
 /bin/cp -f \
   ./index.html \

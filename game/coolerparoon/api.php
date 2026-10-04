@@ -8,7 +8,7 @@ header('Referrer-Policy: no-referrer');
 
 $home = dirname(__DIR__, 3);
 $privateDir = $home . '/zikatec-private/coolerparoon';
-$configPath = $home . '/zikatec-private/config.php';
+$configPath = $privateDir . '/config.php';
 
 try {
     if (!is_dir($privateDir) && !mkdir($privateDir, 0700, true) && !is_dir($privateDir)) {
