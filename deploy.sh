@@ -88,6 +88,9 @@ fi
   "$MANAGEMENT_PATH/api.php" \
   "$MANAGEMENT_PATH/assets/"* \
   "$MANAGEMENT_PATH/fonts/Peyda.ttf" \
+  "$MANAGEMENT_PATH/fonts/PeydaFaNum-Regular.ttf" \
+  "$MANAGEMENT_PATH/fonts/PeydaFaNum-Medium.ttf" \
+  "$MANAGEMENT_PATH/fonts/PeydaFaNum-SemiBold.ttf" \
   "$CONSULTATION_PATH/index.html" \
   "$CONSULTATION_PATH/.htaccess" \
   "$CONSULTATION_PATH/admin.css" \
