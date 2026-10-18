@@ -48,6 +48,24 @@ function body(): array {
     return is_array($decoded) ? $decoded : [];
 }
 
+function passwordLength(string $password): int {
+    $length = preg_match_all('/./us', $password, $matches);
+    return $length === false ? 0 : $length;
+}
+
+function hashSellerPassword(string $password): array {
+    return [password_hash(hash('sha256', $password), PASSWORD_DEFAULT), 'sha256-v1'];
+}
+
+function verifySellerPassword(string $password, array $account): bool {
+    $hash = (string) ($account['passwordHash'] ?? '');
+    if ($hash === '') return false;
+    $scheme = (string) ($account['passwordHashScheme'] ?? '');
+    if ($scheme === 'sha256-v1') return password_verify(hash('sha256', $password), $hash);
+    if ($scheme === '') return password_verify($password, $hash);
+    return false;
+}
+
 function privateConfig(): array {
     $file = PRIVATE_DIR . '/config.php';
     if (!is_file($file)) return [];
@@ -130,10 +148,13 @@ function authenticated(): bool {
         $account = sellerAccount($salespersonId);
         $settings = privateJson(SETTINGS_FILE);
         $configuredRole = (string) ($settings['dashboardRoles'][$salespersonId] ?? 'seller');
-        if (!$account || empty($account['active']) || strcasecmp((string) ($account['username'] ?? ''), (string) $_SESSION['admin_username']) !== 0 || $configuredRole !== 'seller') {
+        $sessionPasswordVersion = (string) ($_SESSION['seller_password_version'] ?? '');
+        $accountPasswordVersion = (string) ($account['passwordVersion'] ?? '');
+        if (!$account || empty($account['active']) || strcasecmp((string) ($account['username'] ?? ''), (string) $_SESSION['admin_username']) !== 0 || $configuredRole !== 'seller' || !hash_equals($accountPasswordVersion, $sessionPasswordVersion)) {
             resetSession();
             return false;
         }
+        $_SESSION['must_change_password'] = !empty($account['mustChangePassword']);
     }
     $_SESSION['admin_last_seen'] = time();
     return true;
@@ -141,6 +162,11 @@ function authenticated(): bool {
 
 function requireAuth(): void {
     if (!authenticated()) respond(401, ['error' => ['code' => 'UNAUTHORIZED', 'message' => 'نشست شما معتبر نیست؛ دوباره وارد شوید.']]);
+}
+
+function requireDashboardAccess(): void {
+    requireAuth();
+    if (sessionRole() === 'seller' && !empty($_SESSION['must_change_password'])) respond(403, ['error' => ['code' => 'PASSWORD_CHANGE_REQUIRED', 'message' => 'برای ادامه، ابتدا رمز عبور اولیه را تغییر دهید.']]);
 }
 
 function requireManager(): void {
@@ -442,10 +468,14 @@ if ($action === 'login' && $method === 'POST') {
         $accounts = privateJson(USERS_FILE)['accounts'] ?? [];
         foreach (is_array($accounts) ? $accounts : [] as $salespersonId => $account) {
             if (!is_array($account) || empty($account['active']) || strcasecmp((string) ($account['username'] ?? ''), $username) !== 0) continue;
-            $passwordHash = (string) ($account['passwordHash'] ?? '');
             $role = (string) (privateJson(SETTINGS_FILE)['dashboardRoles'][$salespersonId] ?? 'seller');
-            if ($passwordHash !== '' && password_verify($password, $passwordHash) && $role === 'seller') {
-                $seller = ['salespersonId' => (string) $salespersonId, 'username' => (string) $account['username']];
+            if (verifySellerPassword($password, $account) && $role === 'seller') {
+                $seller = [
+                    'salespersonId' => (string) $salespersonId,
+                    'username' => (string) $account['username'],
+                    'mustChangePassword' => !empty($account['mustChangePassword']),
+                    'passwordVersion' => (string) ($account['passwordVersion'] ?? ''),
+                ];
                 break;
             }
         }
@@ -462,13 +492,18 @@ if ($action === 'login' && $method === 'POST') {
     $_SESSION['admin_authenticated'] = true;
     $_SESSION['admin_username'] = $managerValid ? $adminUsername : $seller['username'];
     $_SESSION['dashboard_role'] = $managerValid ? 'manager' : 'seller';
-    if ($seller) $_SESSION['salesperson_id'] = $seller['salespersonId'];
+    $_SESSION['must_change_password'] = $seller ? $seller['mustChangePassword'] : false;
+    if ($seller) {
+        $_SESSION['salesperson_id'] = $seller['salespersonId'];
+        $_SESSION['seller_password_version'] = $seller['passwordVersion'];
+    }
     $_SESSION['admin_last_seen'] = time();
     respond(200, [
         'authenticated' => true,
         'username' => (string) $_SESSION['admin_username'],
         'role' => (string) $_SESSION['dashboard_role'],
         'salespersonId' => $seller['salespersonId'] ?? null,
+        'mustChangePassword' => (bool) ($_SESSION['must_change_password'] ?? false),
         'csrfToken' => csrfToken(),
     ]);
 }
@@ -480,6 +515,7 @@ if ($action === 'session' && $method === 'GET') {
         'username' => (string) $_SESSION['admin_username'],
         'role' => sessionRole(),
         'salespersonId' => sessionRole() === 'seller' ? (string) $_SESSION['salesperson_id'] : null,
+        'mustChangePassword' => sessionRole() === 'seller' && !empty($_SESSION['must_change_password']),
         'csrfToken' => csrfToken(),
     ]);
 }
@@ -496,7 +532,7 @@ if ($action === 'account-list' && $method === 'GET') {
     $public = [];
     foreach (is_array($accounts) ? $accounts : [] as $salespersonId => $account) {
         if (!is_array($account)) continue;
-        $public[] = ['salespersonId' => (string) $salespersonId, 'username' => (string) ($account['username'] ?? ''), 'active' => !empty($account['active'])];
+        $public[] = ['salespersonId' => (string) $salespersonId, 'username' => (string) ($account['username'] ?? ''), 'active' => !empty($account['active']), 'mustChangePassword' => !empty($account['mustChangePassword'])];
     }
     respond(200, ['accounts' => $public]);
 }
@@ -520,15 +556,21 @@ if ($action === 'account-save' && $method === 'POST') {
     foreach ($accounts as $existingId => $account) {
         if ($existingId !== $salespersonId && is_array($account) && strcasecmp((string) ($account['username'] ?? ''), $username) === 0) respond(409, ['error' => ['code' => 'USERNAME_EXISTS', 'message' => 'این نام کاربری قبلاً ثبت شده است.']]);
     }
-    if (($current === null && strlen($password) < 12) || ($password !== '' && strlen($password) < 12)) respond(400, ['error' => ['code' => 'WEAK_PASSWORD', 'message' => 'رمز عبور باید دست‌کم ۱۲ نویسه باشد.']]);
+    if ((!$current || $password !== '') && (passwordLength($password) < 8 || strlen($password) > 1024)) respond(400, ['error' => ['code' => 'WEAK_PASSWORD', 'message' => 'رمز عبور باید دست‌کم ۸ نویسه داشته باشد.']]);
     $passwordHash = (string) ($current['passwordHash'] ?? '');
-    if ($password !== '') $passwordHash = password_hash($password, PASSWORD_DEFAULT);
+    $passwordHashScheme = (string) ($current['passwordHashScheme'] ?? '');
+    $passwordVersion = (string) ($current['passwordVersion'] ?? '');
+    if ($password !== '') {
+        [$passwordHash, $passwordHashScheme] = hashSellerPassword($password);
+        $passwordVersion = bin2hex(random_bytes(16));
+    }
     if ($passwordHash === '') respond(400, ['error' => ['code' => 'WEAK_PASSWORD', 'message' => 'رمز عبور اولیه لازم است.']]);
-    $accounts[$salespersonId] = ['username' => $username, 'passwordHash' => $passwordHash, 'active' => $current['active'] ?? true];
+    $mustChangePassword = $password !== '' ? true : !empty($current['mustChangePassword']);
+    $accounts[$salespersonId] = ['username' => $username, 'passwordHash' => $passwordHash, 'passwordHashScheme' => $passwordHashScheme, 'passwordVersion' => $passwordVersion, 'mustChangePassword' => $mustChangePassword, 'active' => $current['active'] ?? true];
     $store['accounts'] = $accounts;
     try { savePrivateJson(USERS_FILE, $store); }
     catch (Throwable $error) { error_log('[sales-dashboard] private account save failed'); respond(500, ['error' => ['code' => 'SAVE_FAILED', 'message' => 'ذخیره دسترسی ناموفق بود.']]); }
-    respond(200, ['account' => ['salespersonId' => $salespersonId, 'username' => $username, 'active' => !empty($accounts[$salespersonId]['active'])]]);
+    respond(200, ['account' => ['salespersonId' => $salespersonId, 'username' => $username, 'active' => !empty($accounts[$salespersonId]['active']), 'mustChangePassword' => $mustChangePassword]]);
 }
 
 if ($action === 'account-status' && $method === 'POST') {
@@ -544,11 +586,38 @@ if ($action === 'account-status' && $method === 'POST') {
     $store['accounts'] = $accounts;
     try { savePrivateJson(USERS_FILE, $store); }
     catch (Throwable $error) { error_log('[sales-dashboard] private account save failed'); respond(500, ['error' => ['code' => 'SAVE_FAILED', 'message' => 'تغییر دسترسی ناموفق بود.']]); }
-    respond(200, ['account' => ['salespersonId' => $salespersonId, 'username' => (string) $accounts[$salespersonId]['username'], 'active' => $active]]);
+    respond(200, ['account' => ['salespersonId' => $salespersonId, 'username' => (string) $accounts[$salespersonId]['username'], 'active' => $active, 'mustChangePassword' => !empty($accounts[$salespersonId]['mustChangePassword'])]]);
+}
+
+if ($action === 'password-change' && $method === 'POST') {
+    requireAuth(); requireCsrf();
+    if (sessionRole() !== 'seller') respond(403, ['error' => ['code' => 'FORBIDDEN', 'message' => 'این عملیات فقط برای حساب فروشنده در دسترس است.']]);
+    $input = body();
+    $currentPassword = (string) ($input['currentPassword'] ?? '');
+    $newPassword = (string) ($input['newPassword'] ?? '');
+    if (passwordLength($newPassword) < 8 || strlen($newPassword) > 1024) respond(400, ['error' => ['code' => 'WEAK_PASSWORD', 'message' => 'رمز جدید باید دست‌کم ۸ نویسه داشته باشد.']]);
+    if ($newPassword === $currentPassword) respond(400, ['error' => ['code' => 'PASSWORD_UNCHANGED', 'message' => 'رمز جدید باید با رمز فعلی متفاوت باشد.']]);
+    $salespersonId = (string) $_SESSION['salesperson_id'];
+    $store = privateJson(USERS_FILE);
+    $accounts = is_array($store['accounts'] ?? null) ? $store['accounts'] : [];
+    $account = is_array($accounts[$salespersonId] ?? null) ? $accounts[$salespersonId] : null;
+    if (!$account || !verifySellerPassword($currentPassword, $account)) respond(401, ['error' => ['code' => 'INVALID_CREDENTIALS', 'message' => 'رمز فعلی صحیح نیست.']]);
+    $passwordVersion = bin2hex(random_bytes(16));
+    [$accounts[$salespersonId]['passwordHash'], $accounts[$salespersonId]['passwordHashScheme']] = hashSellerPassword($newPassword);
+    $accounts[$salespersonId]['passwordVersion'] = $passwordVersion;
+    $accounts[$salespersonId]['mustChangePassword'] = false;
+    $store['accounts'] = $accounts;
+    try { savePrivateJson(USERS_FILE, $store); }
+    catch (Throwable $error) { error_log('[sales-dashboard] private password change failed'); respond(500, ['error' => ['code' => 'SAVE_FAILED', 'message' => 'تغییر رمز ناموفق بود.']]); }
+    $_SESSION['seller_password_version'] = $passwordVersion;
+    $_SESSION['must_change_password'] = false;
+    session_regenerate_id(true);
+    $_SESSION['admin_csrf_token'] = bin2hex(random_bytes(32));
+    respond(200, ['ok' => true, 'mustChangePassword' => false, 'csrfToken' => csrfToken()]);
 }
 
 if ($action === 'dashboard-settings' && $method === 'GET') {
-    requireAuth();
+    requireDashboardAccess();
     $settings = privateJson(SETTINGS_FILE);
     if (sessionRole() === 'seller') $settings = sellerDashboardSettings($settings, (string) $_SESSION['salesperson_id']);
     respond(200, ['settings' => $settings]);
@@ -565,7 +634,7 @@ if ($action === 'dashboard-settings' && $method === 'POST') {
 }
 
 if ($action === 'snapshot' && $method === 'GET') {
-    requireAuth();
+    requireDashboardAccess();
     try {
         $cached = readCache();
         if ($cached !== null && strtotime((string) ($cached['syncedAt'] ?? '')) > time() - CACHE_TTL) respond(200, snapshotForSession($cached));
@@ -581,7 +650,7 @@ if ($action === 'snapshot' && $method === 'GET') {
 }
 
 if ($action === 'sync' && $method === 'POST') {
-    requireAuth(); requireCsrf();
+    requireDashboardAccess(); requireCsrf();
     try {
         $snapshot = synchronize(odooConfig($config));
         writeCache($snapshot);
