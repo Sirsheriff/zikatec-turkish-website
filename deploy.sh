@@ -61,6 +61,7 @@ fi
 /bin/cp -R ./systemManagement/assets "$MANAGEMENT_PATH/assets"
 /bin/cp -R ./systemManagement/fonts "$MANAGEMENT_PATH/fonts"
 /bin/cp -f ./systemManagement/index.html "$MANAGEMENT_PATH/index.html"
+/bin/cp -f ./systemManagement/zikatec-monochrom-03.png "$MANAGEMENT_PATH/zikatec-monochrom-03.png"
 /bin/cp -f ./systemManagement/.htaccess "$MANAGEMENT_PATH/.htaccess"
 /bin/cp -f ./systemManagement/api.php "$MANAGEMENT_PATH/api.php"
 /bin/rm -f "$MANAGEMENT_PATH/admin.css" "$MANAGEMENT_PATH/admin.js"
@@ -84,6 +85,7 @@ fi
   "$DEPLOY_PATH/admin.html" \
   "$DEPLOY_PATH/api.php" \
   "$MANAGEMENT_PATH/index.html" \
+  "$MANAGEMENT_PATH/zikatec-monochrom-03.png" \
   "$MANAGEMENT_PATH/.htaccess" \
   "$MANAGEMENT_PATH/api.php" \
   "$MANAGEMENT_PATH/assets/"* \
