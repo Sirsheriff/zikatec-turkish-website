@@ -210,11 +210,12 @@ try {
                 return ['status' => 400, 'error' => 'نام معتبر نیست.'];
             }
             try {
-                $username = normalizeUsername($body['username'], (string)$player['guest_name']);
+                $username = normalizeUsername($body['username']);
             } catch (InvalidArgumentException $error) {
                 return ['status' => 400, 'error' => $error->getMessage()];
             }
             $state['players'][$player['id']]['username'] = $username;
+            $state['players'][$player['id']]['username_chosen'] = true;
             return ['status' => 200, 'player' => playerView($state['players'][$player['id']])];
         });
         if ($result['status'] !== 200) {
@@ -224,18 +225,30 @@ try {
     }
 
     if ($method === 'GET' && $route === 'leaderboard') {
-        $players = withStore(function (&$state): array {
+        $leaderboard = withStore(function (&$state): array {
+            $viewer = authenticatedPlayer($state);
             $players = array_values(array_filter($state['players'], static fn(array $player): bool => (int)$player['best_score'] > 0));
             usort($players, static function (array $a, array $b): int {
-                $scoreOrder = (int)$b['best_score'] <=> (int)$a['best_score'];
-                return $scoreOrder !== 0 ? $scoreOrder : (int)$a['created_at'] <=> (int)$b['created_at'];
-            }, false);
-            return array_map(static fn(array $player): array => [
-                'username' => (string)$player['username'],
-                'bestScore' => (int)$player['best_score'],
-            ], array_slice($players, 0, 10));
-        });
-        respond(200, ['players' => $players]);
+                return ((int)$b['best_score'] <=> (int)$a['best_score'])
+                    ?: ((int)$a['created_at'] <=> (int)$b['created_at'])
+                    ?: strcmp((string)$a['id'], (string)$b['id']);
+            });
+            $leaders = [];
+            $ownRank = null;
+            foreach ($players as $index => $player) {
+                $isYou = $player['id'] === ($viewer['id'] ?? null);
+                if ($index < 5) {
+                    $leaders[] = leaderboardEntry($player, $index + 1, $isYou);
+                }
+                if ($isYou) {
+                    $ownRank = $index + 1;
+                }
+            }
+            $personal = $viewer !== null && ($ownRank === null || $ownRank > 5)
+                ? leaderboardEntry($viewer, $ownRank, true) : null;
+            return ['players' => $leaders, 'personal' => $personal];
+        }, false);
+        respond(200, $leaderboard);
     }
 
     if ($method === 'POST' && $route === 'runs') {
@@ -249,6 +262,9 @@ try {
             $player = authenticatedPlayer($state);
             if ($player === null) {
                 return ['status' => 401, 'error' => 'برای ادامه وارد حساب شوید.'];
+            }
+            if (needsUsername($player)) {
+                return ['status' => 403, 'error' => 'قبل از شروع بازی، نام نمایشی‌ات را ذخیره کن.'];
             }
             if (!allowRate($state, 'runs:' . $player['id'], 60, 600000)) {
                 return ['status' => 429, 'error' => 'تعداد دورهای شروع‌شده زیاد است؛ کمی بعد دوباره تلاش کنید.'];
@@ -273,6 +289,9 @@ try {
             $player = authenticatedPlayer($state);
             if ($player === null) {
                 return ['status' => 401, 'error' => 'نشست شما منقضی شده است؛ دوباره وارد شوید.'];
+            }
+            if (needsUsername($player)) {
+                return ['status' => 403, 'error' => 'قبل از ثبت امتیاز، نام نمایشی‌ات را ذخیره کن.'];
             }
             $runId = $body['runId'] ?? null;
             $endTick = $body['endTick'] ?? null;
@@ -518,18 +537,33 @@ function playerView(array $player): array
         'username' => (string)$player['username'],
         'guestName' => (string)$player['guest_name'],
         'bestScore' => (int)$player['best_score'],
+        'needsUsername' => needsUsername($player),
     ];
 }
 
-function normalizeUsername(mixed $value, string $guestName): string
+function needsUsername(array $player): bool
 {
-    $username = is_scalar($value) ? (preg_replace('/\s+/u', ' ', trim((string)$value)) ?? '') : '';
+    $username = (string)($player['username'] ?? '');
+    return empty($player['username_chosen']) && ($username === '' || $username === (string)$player['guest_name']);
+}
+
+function leaderboardEntry(array $player, ?int $rank, bool $isYou): array
+{
+    return [
+        'username' => (string)$player['username'], 'bestScore' => (int)$player['best_score'],
+        'rank' => $rank, 'isYou' => $isYou,
+    ];
+}
+
+function normalizeUsername(string $value): string
+{
+    $username = trim(preg_replace('/[\p{Z}\s\x{FEFF}]+/u', ' ', $value) ?? '');
     if ($username === '') {
-        $username = $guestName;
+        throw new InvalidArgumentException('برای ادامه، یک نام نمایشی وارد کن.');
     }
     preg_match_all('/./us', $username, $characters);
     $length = count($characters[0]);
-    if ($length < 1 || $length > 24 || !preg_match('/^[\p{L}\p{N}_. -]+$/u', $username)) {
+    if ($length > 24 || !preg_match('/^[\p{L}\p{M}\p{N}\x{200C}_. -]+$/u', $username) || !preg_match('/[\p{L}\p{N}]/u', $username)) {
         throw new InvalidArgumentException('نام باید ۱ تا ۲۴ حرف یا عدد باشد؛ فاصله، نقطه، خط تیره و زیرخط هم مجاز است.');
     }
     return $username;

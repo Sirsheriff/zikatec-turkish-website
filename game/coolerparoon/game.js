@@ -1,22 +1,22 @@
-import { START_SPEED, BASE_TIMING_WINDOW, runSpeedAt, stageForScore } from './difficulty.js';
+import { runSpeedAt } from './difficulty.js';
 import { createRun, stepRun, TICKS_PER_SECOND } from './run-physics.js';
 
 const canvas = document.querySelector('#game');
 const ctx = canvas.getContext('2d');
 const stage = document.querySelector('#stage');
 const overlay = document.querySelector('#overlay');
+const overlayText = document.querySelector('#overlayText');
 const scoreEl = document.querySelector('#score');
 const bestEl = document.querySelector('#best');
 const pauseBtn = document.querySelector('#pauseBtn');
 const soundBtn = document.querySelector('#soundBtn');
-const levelText = document.querySelector('#levelText');
-const speedText = document.querySelector('#speedText');
-const timingText = document.querySelector('#timingText');
 const accountBtn = document.querySelector('#accountBtn');
+const page = document.querySelector('main');
 const authModal = document.querySelector('#authModal');
 const authForm = document.querySelector('#authForm');
 const profileForm = document.querySelector('#profileForm');
 const usernameInput = document.querySelector('#usernameInput');
+const saveUsernameBtn = document.querySelector('#saveUsernameBtn');
 const profileMessage = document.querySelector('#profileMessage');
 const phoneInput = document.querySelector('#phoneInput');
 const codeInput = document.querySelector('#codeInput');
@@ -28,6 +28,9 @@ const authDescription = document.querySelector('#authDescription');
 const authMessage = document.querySelector('#authMessage');
 const logoutBtn = document.querySelector('#logoutBtn');
 const leaderboardList = document.querySelector('#leaderboardList');
+const personalLeaderboard = document.querySelector('#personalLeaderboard');
+const personalLeaderboardList = document.querySelector('#personalLeaderboardList');
+const personalRankTitle = document.querySelector('#personalRankTitle');
 const leaderboardStatus = document.querySelector('#leaderboardStatus');
 
 const cooler = new Image();
@@ -39,6 +42,8 @@ const persian = value => String(value).replace(/\d/g, digit => '۰۱۲۳۴۵۶۷
 let best = 0;
 let sessionToken = localStorage.getItem('kolor-session');
 let currentPlayer = null;
+let leaderboardRequest = 0;
+let authReturnFocus;
 let pendingStart = false;
 let starting = false;
 let run;
@@ -70,7 +75,7 @@ function api(path, options = {}) {
 }
 
 function updateAccount() {
-  accountBtn.textContent = currentPlayer ? currentPlayer.username : 'ورود با موبایل';
+  accountBtn.textContent = !currentPlayer ? 'ورود با موبایل' : currentPlayer.needsUsername ? 'انتخاب نام' : currentPlayer.username;
   best = currentPlayer?.bestScore || 0;
   bestEl.textContent = number(best);
 }
@@ -92,38 +97,67 @@ async function refreshProfile() {
   }
 }
 
-function renderLeaderboard(players = []) {
+function leaderboardRow(player) {
+  const row = document.createElement('li');
+  row.className = 'leaderboard-row';
+  if (player.rank !== null) row.value = player.rank;
+
+  const rank = document.createElement('span');
+  rank.className = 'leaderboard-rank';
+  rank.textContent = player.rank === null ? '—' : persian(player.rank);
+  if (player.rank === null) rank.setAttribute('aria-hidden', 'true');
+
+  const identity = document.createElement('span');
+  identity.className = 'leaderboard-identity';
+  const label = document.createElement('bdi');
+  label.className = 'leaderboard-player';
+  label.textContent = player.username;
+  label.title = player.username;
+  identity.append(label);
+
+  if (player.isYou) {
+    row.classList.add('is-you');
+    const badge = document.createElement('span');
+    badge.className = 'leaderboard-you-label';
+    badge.textContent = 'شما';
+    identity.append(badge);
+  }
+
+  const scoreValue = document.createElement('strong');
+  scoreValue.className = 'leaderboard-score';
+  scoreValue.textContent = number(player.bestScore);
+  row.append(rank, identity, scoreValue);
+  return row;
+}
+
+function renderLeaderboard(players, personal) {
   leaderboardList.replaceChildren();
-  if (!players.length) {
+  personalLeaderboardList.replaceChildren();
+  personalLeaderboard.classList.toggle('hidden', !personal);
+  if (personal) {
+    personalRankTitle.textContent = personal.rank === null ? 'هنوز رتبه‌ای نداری' : 'جایگاه شما';
+    personalLeaderboardList.append(leaderboardRow(personal));
+  }
+  if (!players) return;
+  if (players.length === 0) {
     const empty = document.createElement('li');
     empty.className = 'empty-leaderboard';
     empty.textContent = 'هنوز رکوردی ثبت نشده است.';
     leaderboardList.append(empty);
     return;
   }
-  for (const [index, player] of players.entries()) {
-    const row = document.createElement('li');
-    row.className = 'leaderboard-row';
-    const rank = document.createElement('span');
-    rank.className = 'leaderboard-rank';
-    rank.textContent = persian(index + 1);
-    const label = document.createElement('span');
-    label.className = 'leaderboard-player';
-    label.textContent = player.username || player.guestName;
-    const scoreValue = document.createElement('strong');
-    scoreValue.className = 'leaderboard-score';
-    scoreValue.textContent = number(player.bestScore);
-    row.append(rank, label, scoreValue);
-    leaderboardList.append(row);
-  }
+  leaderboardList.append(...players.map(leaderboardRow));
 }
 
 async function refreshLeaderboard() {
+  const request = ++leaderboardRequest;
   try {
-    const result = await api('/api/leaderboard');
-    renderLeaderboard(result.players);
+    const { players, personal } = await api('/api/leaderboard');
+    if (request !== leaderboardRequest) return;
+    renderLeaderboard(players, personal);
     leaderboardStatus.textContent = 'به‌روزرسانی زنده';
   } catch {
+    if (request !== leaderboardRequest) return;
     leaderboardStatus.textContent = 'اتصال برقرار نشد';
     renderLeaderboard();
   }
@@ -135,6 +169,10 @@ function setAuthMessage(message = '', isError = false) {
 }
 
 function openAuth() {
+  if (authModal.classList.contains('hidden')) {
+    authReturnFocus = page.contains(document.activeElement) ? document.activeElement : accountBtn;
+  }
+  page.inert = true;
   authModal.classList.remove('hidden');
   authForm.classList.toggle('hidden', Boolean(currentPlayer));
   profileForm.classList.toggle('hidden', !currentPlayer);
@@ -150,26 +188,40 @@ function openAuth() {
   sendCodeBtn.disabled = false;
   sendCodeBtn.textContent = 'ارسال کد';
   clearInterval(resendTimer);
+  profileMessage.textContent = '';
+  profileMessage.classList.remove('error');
+  setAuthMessage('');
   if (currentPlayer) {
-    authTitle.textContent = 'حساب کاربری';
-    authDescription.textContent = `نام پیش‌فرض: ${currentPlayer.guestName} · رکورد شخصی: ${number(currentPlayer.bestScore)}`;
-    usernameInput.value = currentPlayer.username;
-    profileMessage.textContent = '';
-    setAuthMessage('');
+    const choosingName = currentPlayer.needsUsername;
+    authTitle.textContent = choosingName ? 'نامت را انتخاب کن' : 'حساب کاربری';
+    authDescription.textContent = choosingName
+      ? 'برای شرکت در بازی، نامی را که در جدول رکوردها نمایش داده می‌شود وارد کن.'
+      : `رکورد شخصی ${number(currentPlayer.bestScore)}`;
+    usernameInput.value = choosingName ? '' : currentPlayer.username;
+    saveUsernameBtn.textContent = choosingName && pendingStart ? 'ذخیره و شروع بازی' : 'ذخیرهٔ نام';
+    usernameInput.focus();
   } else {
     authTitle.textContent = 'ورود به مسابقه';
     authDescription.textContent = 'شمارهٔ موبایل را وارد کن تا کد ورود برایت پیامک شود.';
     usernameInput.value = '';
-    profileMessage.textContent = '';
-    setAuthMessage('');
-    setTimeout(() => phoneInput.focus(), 0);
+    phoneInput.focus();
   }
 }
 
 function closeAuth() {
   authModal.classList.add('hidden');
+  page.inert = false;
+  authReturnFocus?.focus();
+  authReturnFocus = undefined;
   clearInterval(resendTimer);
-  if (pendingStart && !currentPlayer) pendingStart = false;
+  pendingStart = false;
+}
+
+function completeSignIn() {
+  const shouldStart = pendingStart;
+  closeAuth();
+  void refreshLeaderboard();
+  if (shouldStart) void requestStart();
 }
 
 async function requestStart() {
@@ -177,7 +229,7 @@ async function requestStart() {
   starting = true;
   try {
     if (!currentPlayer) await refreshProfile();
-    if (!currentPlayer) {
+    if (!currentPlayer || currentPlayer.needsUsername) {
       pendingStart = true;
       openAuth();
       return;
@@ -212,7 +264,7 @@ async function requestCode() {
     verifyCodeBtn.classList.remove('hidden');
     sendCodeBtn.textContent = 'ارسال دوباره';
     setAuthMessage(result.devCode
-      ? `کد آزمایشی: ${persian(result.devCode)} (پیامک واقعی با تنظیم SMS.ir ارسال می‌شود)`
+      ? `کد آزمایشی: ${persian(result.devCode)}`
       : result.message);
     codeInput.focus();
     let remaining = 60;
@@ -246,11 +298,12 @@ async function verifyCode(event) {
     localStorage.removeItem('kolor-session');
     currentPlayer = result.player;
     updateAccount();
-    const shouldStart = pendingStart;
-    pendingStart = false;
-    closeAuth();
-    await refreshLeaderboard();
-    if (shouldStart) void requestStart();
+    if (currentPlayer.needsUsername) {
+      openAuth();
+      void refreshLeaderboard();
+    } else {
+      completeSignIn();
+    }
   } catch (error) {
     setAuthMessage(error.message, true);
   } finally {
@@ -271,13 +324,16 @@ async function logout() {
   localStorage.removeItem('kolor-session');
   updateAccount();
   closeAuth();
+  renderLeaderboard();
   void refreshLeaderboard();
 }
 
 async function saveUsername(event) {
   event.preventDefault();
-  const saveButton = profileForm.querySelector('button[type="submit"]');
-  saveButton.disabled = true;
+  if (!currentPlayer || saveUsernameBtn.disabled) return;
+  const playerId = currentPlayer.id;
+  const choosingName = currentPlayer.needsUsername;
+  saveUsernameBtn.disabled = true;
   profileMessage.classList.remove('error');
   profileMessage.textContent = 'در حال ذخیره…';
   try {
@@ -285,8 +341,13 @@ async function saveUsername(event) {
       method: 'PUT',
       body: JSON.stringify({ username: usernameInput.value }),
     });
-    currentPlayer = result.player;
+    if (currentPlayer?.id !== playerId) return;
+    currentPlayer = { ...result.player, bestScore: Math.max(currentPlayer.bestScore, result.player.bestScore) };
     updateAccount();
+    if (choosingName) {
+      completeSignIn();
+      return;
+    }
     usernameInput.value = currentPlayer.username;
     profileMessage.textContent = `نام «${currentPlayer.username}» ذخیره شد.`;
     await refreshLeaderboard();
@@ -294,7 +355,7 @@ async function saveUsername(event) {
     profileMessage.textContent = error.message;
     profileMessage.classList.add('error');
   } finally {
-    saveButton.disabled = false;
+    saveUsernameBtn.disabled = false;
   }
 }
 
@@ -329,7 +390,8 @@ function beep(frequency, duration, type = 'sine', volume = 0.035) {
 
 function setOverlay(title, message, button, icon) {
   document.querySelector('#overlayTitle').textContent = title;
-  document.querySelector('#overlayText').textContent = message;
+  overlayText.textContent = message;
+  overlayText.hidden = !message;
   document.querySelector('#startBtn').firstChild.textContent = button + ' ';
   document.querySelector('#overlayIcon').textContent = icon;
   overlay.classList.remove('hidden');
@@ -346,9 +408,6 @@ function start(serverRun) {
   dustClock = 0;
   resize();
   scoreEl.textContent = number(0);
-  levelText.textContent = 'مرحله ۱';
-  speedText.textContent = 'سرعت ۱×';
-  timingText.textContent = 'فرصت پرش ۰٫۴۳ ث';
   overlay.classList.add('hidden');
   pauseBtn.setAttribute('aria-label', 'مکث بازی');
   lastTime = performance.now();
@@ -368,7 +427,7 @@ function togglePause() {
   if (mode === 'playing') {
     mode = 'paused';
     pauseBtn.setAttribute('aria-label', 'ادامه بازی');
-    setOverlay('بازی متوقف شد', 'نفسی تازه کن و دوباره ادامه بده.', 'ادامه بازی', 'Ⅱ');
+    setOverlay('بازی متوقف شد', '', 'ادامه بازی', 'Ⅱ');
   } else if (mode === 'paused') {
     mode = 'playing';
     pauseBtn.setAttribute('aria-label', 'مکث بازی');
@@ -380,7 +439,7 @@ function togglePause() {
 function finish() {
   mode = 'over';
   beep(200, .36, 'sawtooth', .025);
-  setOverlay('دور بازی تمام شد', `امتیاز تو: ${number(simulation.score)}  ·  دوباره تلاش کن!`, 'بازی دوباره', '×');
+  setOverlay('دور بازی تمام شد', `امتیاز تو: ${number(simulation.score)}`, 'بازی دوباره', '×');
   void submitScore();
 }
 
@@ -420,18 +479,9 @@ function update(dt) {
     beep(720, .07, 'sine', .018);
   }
   if (simulation.ended) { finish(); return; }
-  const stage = stageForScore(simulation.score);
-  const runSpeed = runSpeedAt(simulation.tick / TICKS_PER_SECOND);
-  const speed = runSpeed * simulation.speedScale;
-  const timingWindow = BASE_TIMING_WINDOW * .85 ** (stage - 1);
-  const nextLevel = `مرحله ${persian(stage)}`;
-  const nextSpeed = `سرعت ${persian((runSpeed / START_SPEED).toFixed(1))}×`;
-  const nextTiming = `فرصت پرش ${persian(timingWindow.toFixed(2)).replace('.', '٫')} ث`;
-  if (levelText.textContent !== nextLevel) levelText.textContent = nextLevel;
-  if (speedText.textContent !== nextSpeed) speedText.textContent = nextSpeed;
-  if (timingText.textContent !== nextTiming) timingText.textContent = nextTiming;
   dustClock -= dt;
   if (simulation.y === 0 && dustClock <= 0) {
+    const speed = runSpeedAt(simulation.tick / TICKS_PER_SECOND) * simulation.speedScale;
     dustClock = .13;
     particles.push({ x: playerX() + 16, y: ground - 5, vx: -speed * .19, vy: -13 - Math.random() * 20, life: .36 });
   }
@@ -588,4 +638,7 @@ cooler.onload = draw;
 angledCooler.onload = draw;
 resize();
 requestAnimationFrame(frame);
-void refreshProfile().then(() => refreshLeaderboard());
+void refreshProfile().then(player => {
+  if (player?.needsUsername && authModal.classList.contains('hidden')) openAuth();
+  return refreshLeaderboard();
+});
