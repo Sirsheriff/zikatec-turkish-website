@@ -1,6 +1,6 @@
 export const STAGE_COUNT = 6;
 export const JUMP_AIRTIME = 2 * 810 / 1950;
-export const BASE_TIMING_WINDOW = .43;
+export const BASE_TIMING_WINDOW = .31;
 export const OBSTACLES_PER_STAGE = 3;
 export const START_SPEED = 360;
 export const MAX_SPEED = 840;

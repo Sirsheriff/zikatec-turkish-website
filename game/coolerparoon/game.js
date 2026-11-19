@@ -69,7 +69,7 @@ function api(path, options = {}) {
   const endpoint = new URL(path.replace(/^\/+/, ''), new URL('./', document.baseURI));
   return fetch(endpoint, { ...options, headers }).then(async response => {
     const data = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(data.error || 'ارتباط با سرور انجام نشد.');
+    if (!response.ok) throw Object.assign(new Error(data.error || 'ارتباط با سرور انجام نشد.'), { status: response.status });
     return data;
   });
 }
@@ -88,7 +88,8 @@ async function refreshProfile() {
     currentPlayer = result.player;
     updateAccount();
     return currentPlayer;
-  } catch {
+  } catch (error) {
+    if (error.status !== 401) return currentPlayer;
     sessionToken = null;
     currentPlayer = null;
     localStorage.removeItem('kolor-session');
@@ -184,6 +185,7 @@ function openAuth() {
   codeInput.classList.add('hidden');
   codeLabel.classList.add('hidden');
   verifyCodeBtn.classList.add('hidden');
+  sendCodeBtn.type = 'submit';
   sendCodeBtn.classList.remove('hidden');
   sendCodeBtn.disabled = false;
   sendCodeBtn.textContent = 'ارسال کد';
@@ -251,6 +253,7 @@ function normalizeDigits(value) {
 }
 
 async function requestCode() {
+  if (sendCodeBtn.disabled || !phoneInput.reportValidity()) return;
   sendCodeBtn.disabled = true;
   setAuthMessage('در حال ارسال کد…');
   try {
@@ -262,6 +265,7 @@ async function requestCode() {
     codeInput.required = true;
     codeLabel.classList.remove('hidden');
     verifyCodeBtn.classList.remove('hidden');
+    sendCodeBtn.type = 'button';
     sendCodeBtn.textContent = 'ارسال دوباره';
     setAuthMessage(result.devCode
       ? `کد آزمایشی: ${persian(result.devCode)}`
@@ -285,8 +289,8 @@ async function requestCode() {
   }
 }
 
-async function verifyCode(event) {
-  event.preventDefault();
+async function verifyCode() {
+  if (verifyCodeBtn.disabled) return;
   verifyCodeBtn.disabled = true;
   setAuthMessage('در حال بررسی کد…');
   try {
@@ -629,8 +633,14 @@ document.addEventListener('keydown', event => {
 accountBtn.addEventListener('click', openAuth);
 document.querySelector('#authClose').addEventListener('click', closeAuth);
 document.querySelector('#authModal').addEventListener('click', event => { if (event.target === authModal) closeAuth(); });
-sendCodeBtn.addEventListener('click', requestCode);
-authForm.addEventListener('submit', verifyCode);
+sendCodeBtn.addEventListener('click', () => {
+  if (sendCodeBtn.type === 'button') void requestCode();
+});
+authForm.addEventListener('submit', event => {
+  event.preventDefault();
+  if (codeInput.classList.contains('hidden')) void requestCode();
+  else void verifyCode();
+});
 profileForm.addEventListener('submit', saveUsername);
 logoutBtn.addEventListener('click', () => { void logout(); });
 window.addEventListener('resize', resize);

@@ -50,7 +50,7 @@ function verifyRun(array $run, int $endTick, array $jumps, int $durationMs): ?in
             }
             $input++;
             $stage = min(6, 1 + intdiv($score, 3));
-            $safeTime = .43 * .85 ** ($stage - 1) + ($hitWidth + 58 - 10) / $speed;
+            $safeTime = .31 * .85 ** ($stage - 1) + ($hitWidth + 58 - 10) / $speed;
             $low = 1000;
             $high = 12000;
             for ($i = 0; $i < 32; $i++) {

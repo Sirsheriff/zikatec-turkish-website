@@ -14,7 +14,7 @@
 body { min-width: 320px; min-height: 100vh; margin: 0; background: radial-gradient(circle at 50% -15%, #263d4a, #1e2429 42%, #181c20 80%); }
 button { font: inherit; cursor: pointer; }
 button:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; }
-.page { width: min(1080px, calc(100% - 40px)); margin: auto; }
+.page { width: min(1080px, calc(100% - 40px)); margin: auto; padding-bottom: 30px; }
 .topbar { height: 98px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #58595B; direction: ltr; }
 .brand { width: 134px; height: 72px; display: grid; place-items: center; overflow: hidden; border-radius: 13px; background: var(--grey-light); box-shadow: 0 8px 24px #0002; }
 .brand svg { width: 126px; height: 68px; }
@@ -54,7 +54,6 @@ kbd { display: grid; place-items: center; min-width: 28px; height: 28px; padding
 .jump-button:hover, .jump-button:active { color: #fff; background: var(--blue-deep); }
 .jump-arrow { font: 700 19px/1 Arial, sans-serif; }
 .mobile-hint { display: none; }
-.page-footer { padding: 24px 0 30px; color: var(--grey-mid); font-size: 12px; text-align: center; }
 .hidden { display: none !important; }
 .leaderboard { margin: 22px 0 0; padding: 22px 28px 14px; border: 1px solid #3d454b; border-radius: 17px; background: #22282d; }
 .leaderboard-heading { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 10px; }
@@ -110,7 +109,6 @@ kbd { display: grid; place-items: center; min-width: 28px; height: 28px; padding
   .game-footer { height: 70px; padding: 0 16px; }
   .hint:not(.mobile-hint) { display: none; }
   .mobile-hint { display: block; font-size: 12px; }
-  .page-footer { padding-top: 20px; }
   .leaderboard { padding: 17px 15px 10px; }
   .leaderboard-row { grid-template-columns: minmax(32px, max-content) minmax(0, 1fr) auto; gap: 8px; }
   .auth-card { padding: 26px 20px 22px; }

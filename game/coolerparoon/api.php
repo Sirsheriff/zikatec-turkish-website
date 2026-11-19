@@ -510,9 +510,8 @@ function sessionToken(): ?string
 
 function setSessionCookie(string $token, int $expires): void
 {
-    $path = rtrim(dirname((string)($_SERVER['SCRIPT_NAME'] ?? '/api.php')), '/') . '/';
     setcookie('kolor_session', $token, [
-        'expires' => $expires, 'path' => $path, 'secure' => true,
+        'expires' => $expires, 'path' => '/game/coolerparoon/', 'secure' => true,
         'httponly' => true, 'samesite' => 'Strict',
     ]);
 }
