@@ -7,10 +7,14 @@ header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('X-Content-Type-Options: nosniff');
 header('X-Frame-Options: SAMEORIGIN');
 header('Referrer-Policy: same-origin');
+header('X-Robots-Tag: noindex, nofollow, noarchive', true);
+header("Permissions-Policy: camera=(), microphone=(), geolocation=()");
 
 $isHttps = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
     || (($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https');
 
+ini_set('session.use_strict_mode', '1');
+ini_set('session.use_only_cookies', '1');
 session_name('zikatec_admin_session');
 session_set_cookie_params([
     'lifetime' => 28800,
@@ -21,9 +25,10 @@ session_set_cookie_params([
 ]);
 session_start();
 
-$privateDirectory = dirname((string) ($_SERVER['DOCUMENT_ROOT'] ?? __DIR__)) . DIRECTORY_SEPARATOR . 'zikatec-private';
+$privateDirectory = getenv('ZIKATEC_PRIVATE_DIR') ?: '/home3/zikatecn/zikatec-private';
 $configFile = $privateDirectory . DIRECTORY_SEPARATOR . 'config.php';
 $dataFile = $privateDirectory . DIRECTORY_SEPARATOR . 'consultations.json';
+$loginAttemptsFile = $privateDirectory . DIRECTORY_SEPARATOR . 'login-attempts.json';
 
 function respond(int $status, array $payload): void
 {
@@ -130,25 +135,93 @@ function requireAdmin(): void
     $_SESSION['admin_last_seen'] = time();
 }
 
+function csrfToken(): string
+{
+    if (empty($_SESSION['admin_csrf_token'])) {
+        $_SESSION['admin_csrf_token'] = bin2hex(random_bytes(32));
+    }
+    return (string) $_SESSION['admin_csrf_token'];
+}
+
+function requireCsrf(): void
+{
+    $provided = (string) ($_SERVER['HTTP_X_CSRF_TOKEN'] ?? '');
+    $expected = (string) ($_SESSION['admin_csrf_token'] ?? '');
+    if ($provided === '' || $expected === '' || !hash_equals($expected, $provided)) {
+        respond(403, ['error' => 'Güvenlik doğrulaması başarısız. Sayfayı yenileyip tekrar deneyin.']);
+    }
+}
+
+function loginRateKey(): string
+{
+    return hash('sha256', (string) ($_SERVER['REMOTE_ADDR'] ?? 'unknown'));
+}
+
+function loginLimitState(string $file): array
+{
+    $key = loginRateKey();
+    $now = time();
+    return updateRecords($file, static function (array &$entries) use ($key, $now): array {
+        foreach ($entries as $entryKey => $entry) {
+            if (!is_array($entry) || $now - (int) ($entry['lastAttempt'] ?? 0) > 86400) unset($entries[$entryKey]);
+        }
+        $entry = is_array($entries[$key] ?? null) ? $entries[$key] : [];
+        if ($now - (int) ($entry['windowStarted'] ?? 0) > 900) {
+            $entry = ['attempts' => 0, 'windowStarted' => $now, 'blockedUntil' => 0, 'lastAttempt' => $now];
+            $entries[$key] = $entry;
+        }
+        return $entry;
+    });
+}
+
+function recordLoginFailure(string $file): array
+{
+    $key = loginRateKey();
+    $now = time();
+    return updateRecords($file, static function (array &$entries) use ($key, $now): array {
+        $entry = is_array($entries[$key] ?? null) ? $entries[$key] : [];
+        if ($now - (int) ($entry['windowStarted'] ?? 0) > 900) {
+            $entry = ['attempts' => 0, 'windowStarted' => $now, 'blockedUntil' => 0];
+        }
+        $entry['attempts'] = (int) ($entry['attempts'] ?? 0) + 1;
+        $entry['lastAttempt'] = $now;
+        if ($entry['attempts'] >= 5) $entry['blockedUntil'] = $now + 600;
+        $entries[$key] = $entry;
+        return $entry;
+    });
+}
+
+function clearLoginFailures(string $file): void
+{
+    $key = loginRateKey();
+    updateRecords($file, static function (array &$entries) use ($key): void {
+        unset($entries[$key]);
+    });
+}
+
 function loadCredentials(string $configFile): array
 {
     $username = getenv('ZIKATEC_ADMIN_USER') ?: '';
     $password = getenv('ZIKATEC_ADMIN_PASSWORD') ?: '';
+    $passwordHash = getenv('ZIKATEC_ADMIN_PASSWORD_HASH') ?: '';
 
-    if (($username === '' || $password === '') && is_file($configFile)) {
+    if (($username === '' || ($password === '' && $passwordHash === '')) && is_file($configFile)) {
         $config = require $configFile;
         if (is_array($config)) {
             $username = (string) ($config['username'] ?? '');
             $password = (string) ($config['password'] ?? '');
+            $passwordHash = (string) ($config['password_hash'] ?? '');
         }
     }
 
-    $configured = $username !== '' && $password !== ''
-        && $username !== 'CHANGE_ME' && $password !== 'CHANGE_ME_NOW';
-    return [$configured, $username, $password];
+    $plainConfigured = $password !== '' && $password !== 'CHANGE_ME_NOW';
+    $hashConfigured = $passwordHash !== '' && !empty(password_get_info($passwordHash)['algo']);
+    $configured = $username !== '' && $username !== 'CHANGE_ME' && ($plainConfigured || $hashConfigured);
+    return [$configured, $username, $password, $passwordHash];
 }
 
 ensurePrivateStorage($privateDirectory, $dataFile);
+ensurePrivateStorage($privateDirectory, $loginAttemptsFile);
 $action = (string) ($_GET['action'] ?? '');
 
 if ($action === 'create') {
@@ -177,22 +250,30 @@ if ($action === 'create') {
 
 if ($action === 'login') {
     requireMethod('POST');
-    [$configured, $adminUser, $adminPassword] = loadCredentials($configFile);
+    [$configured, $adminUser, $adminPassword, $adminPasswordHash] = loadCredentials($configFile);
     if (!$configured) {
         respond(503, ['error' => 'Yönetici hesabı henüz sunucuda ayarlanmamış.']);
     }
     $attempts = (int) ($_SESSION['login_attempts'] ?? 0);
     $blockedUntil = (int) ($_SESSION['login_blocked_until'] ?? 0);
-    if ($blockedUntil > time()) {
+    $rateState = loginLimitState($loginAttemptsFile);
+    $serverBlockedUntil = (int) ($rateState['blockedUntil'] ?? 0);
+    if ($blockedUntil > time() || $serverBlockedUntil > time()) {
+        header('Retry-After: ' . max(1, max($blockedUntil, $serverBlockedUntil) - time()));
         respond(429, ['error' => 'Çok fazla hatalı deneme. Lütfen daha sonra tekrar deneyin.']);
     }
     $body = readBody();
+    $submittedPassword = (string) ($body['password'] ?? '');
+    $passwordValid = $adminPasswordHash !== ''
+        ? password_verify($submittedPassword, $adminPasswordHash)
+        : hash_equals($adminPassword, $submittedPassword);
     $valid = hash_equals($adminUser, (string) ($body['username'] ?? ''))
-        && hash_equals($adminPassword, (string) ($body['password'] ?? ''));
+        && $passwordValid;
     if (!$valid) {
         $attempts++;
         $_SESSION['login_attempts'] = $attempts;
         if ($attempts >= 5) $_SESSION['login_blocked_until'] = time() + 600;
+        recordLoginFailure($loginAttemptsFile);
         respond(401, ['error' => 'Kullanıcı adı veya parola hatalı.']);
     }
     session_regenerate_id(true);
@@ -200,18 +281,29 @@ if ($action === 'login') {
     $_SESSION['admin_username'] = $adminUser;
     $_SESSION['admin_last_seen'] = time();
     unset($_SESSION['login_attempts'], $_SESSION['login_blocked_until']);
-    respond(200, ['ok' => true, 'username' => $adminUser]);
+    clearLoginFailures($loginAttemptsFile);
+    respond(200, ['ok' => true, 'username' => $adminUser, 'csrfToken' => csrfToken()]);
 }
 
 if ($action === 'session') {
     requireMethod('GET');
+    if (empty($_SESSION['admin_authenticated']) || empty($_SESSION['admin_username'])) {
+        respond(200, ['authenticated' => false]);
+    }
+    $lastSeen = (int) ($_SESSION['admin_last_seen'] ?? 0);
+    if ($lastSeen > 0 && time() - $lastSeen > 28800) {
+        $_SESSION = [];
+        session_destroy();
+        respond(200, ['authenticated' => false]);
+    }
     requireAdmin();
-    respond(200, ['authenticated' => true, 'username' => $_SESSION['admin_username']]);
+    respond(200, ['authenticated' => true, 'username' => $_SESSION['admin_username'], 'csrfToken' => csrfToken()]);
 }
 
 if ($action === 'logout') {
     requireMethod('POST');
     requireAdmin();
+    requireCsrf();
     $_SESSION = [];
     if (ini_get('session.use_cookies')) {
         $params = session_get_cookie_params();
@@ -232,6 +324,7 @@ if ($action === 'list') {
 if ($action === 'status') {
     requireMethod('POST');
     requireAdmin();
+    requireCsrf();
     $body = readBody();
     $id = cleanText($body['id'] ?? '', 64);
     $status = cleanText($body['status'] ?? '', 20);

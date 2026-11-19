@@ -2,14 +2,38 @@
 set -euo pipefail
 
 DEPLOY_PATH="/home3/zikatecn/public_html"
+MANAGEMENT_PATH="$DEPLOY_PATH/systemManagement"
+CONSULTATION_PATH="$DEPLOY_PATH/consultationManagement"
 PRIVATE_PATH="/home3/zikatecn/zikatec-private"
+COOLERPAROON_PATH="$DEPLOY_PATH/game/coolerparoon"
+COOLERPAROON_PRIVATE_PATH="$PRIVATE_PATH/coolerparoon"
 
-/bin/mkdir -p "$DEPLOY_PATH" "$PRIVATE_PATH"
-/bin/chmod 700 "$PRIVATE_PATH"
+PHP_BIN="$(command -v php || true)"
+if [[ -z "$PHP_BIN" ]]; then
+  for candidate in /usr/local/bin/php /usr/bin/php; do
+    if [[ -x "$candidate" ]]; then PHP_BIN="$candidate"; break; fi
+  done
+fi
+if [[ -z "$PHP_BIN" ]]; then
+  echo "PHP CLI bulunamadı; api.php sözdizimi doğrulanamadı." >&2
+  exit 1
+fi
+"$PHP_BIN" -l ./api.php
+"$PHP_BIN" -l ./systemManagement/api.php
+"$PHP_BIN" -l ./game/coolerparoon/api.php
+"$PHP_BIN" -l ./game/coolerparoon/run-physics.php
+
+/bin/mkdir -p "$DEPLOY_PATH" "$MANAGEMENT_PATH" "$CONSULTATION_PATH" "$PRIVATE_PATH" "$COOLERPAROON_PATH" "$COOLERPAROON_PRIVATE_PATH"
+/bin/chmod 700 "$PRIVATE_PATH" "$COOLERPAROON_PRIVATE_PATH"
 
 if [[ ! -f "$PRIVATE_PATH/config.php" ]]; then
   /bin/cp ./private-config.example.php "$PRIVATE_PATH/config.php"
   /bin/chmod 600 "$PRIVATE_PATH/config.php"
+fi
+
+if [[ ! -f "$COOLERPAROON_PRIVATE_PATH/config.php" ]]; then
+  /bin/cp ./game/coolerparoon/config.example.php "$COOLERPAROON_PRIVATE_PATH/config.php"
+  /bin/chmod 600 "$COOLERPAROON_PRIVATE_PATH/config.php"
 fi
 
 /bin/cp -R ./assets "$DEPLOY_PATH/"
@@ -21,10 +45,38 @@ fi
   ./product.css \
   ./product.js \
   ./admin.html \
-  ./admin.css \
-  ./admin.js \
   ./api.php \
   "$DEPLOY_PATH/"
+
+/bin/cp -R ./game/coolerparoon/assets "$COOLERPAROON_PATH/"
+/bin/cp -f \
+  ./game/coolerparoon/.htaccess \
+  ./game/coolerparoon/index.html \
+  ./game/coolerparoon/style.css \
+  ./game/coolerparoon/game.js \
+  ./game/coolerparoon/difficulty.js \
+  ./game/coolerparoon/run-physics.js \
+  ./game/coolerparoon/run-physics.php \
+  ./game/coolerparoon/api.php \
+  "$COOLERPAROON_PATH/"
+
+/bin/rm -rf "$MANAGEMENT_PATH/assets" "$MANAGEMENT_PATH/fonts"
+/bin/cp -R ./systemManagement/assets "$MANAGEMENT_PATH/assets"
+/bin/cp -R ./systemManagement/fonts "$MANAGEMENT_PATH/fonts"
+/bin/cp -f ./systemManagement/index.html "$MANAGEMENT_PATH/index.html"
+/bin/cp -f ./systemManagement/zikatec-monochrom-03.png "$MANAGEMENT_PATH/zikatec-monochrom-03.png"
+/bin/cp -f ./systemManagement/.htaccess "$MANAGEMENT_PATH/.htaccess"
+/bin/cp -f ./systemManagement/api.php "$MANAGEMENT_PATH/api.php"
+/bin/rm -f "$MANAGEMENT_PATH/admin.css" "$MANAGEMENT_PATH/admin.js"
+
+/bin/cp -f ./consultationManagement/index.html "$CONSULTATION_PATH/index.html"
+/bin/cp -f ./consultationManagement/.htaccess "$CONSULTATION_PATH/.htaccess"
+/bin/cp -f ./consultationManagement/admin.css "$CONSULTATION_PATH/admin.css"
+/bin/cp -f ./consultationManagement/admin.js "$CONSULTATION_PATH/admin.js"
+
+# The former root-level panel assets are no longer used. admin.html redirects
+# to the preserved consultation panel; /systemManagement is the sales dashboard.
+/bin/rm -f "$DEPLOY_PATH/admin.css" "$DEPLOY_PATH/admin.js"
 
 /bin/chmod 644 \
   "$DEPLOY_PATH/index.html" \
@@ -34,6 +86,20 @@ fi
   "$DEPLOY_PATH/product.css" \
   "$DEPLOY_PATH/product.js" \
   "$DEPLOY_PATH/admin.html" \
-  "$DEPLOY_PATH/admin.css" \
-  "$DEPLOY_PATH/admin.js" \
-  "$DEPLOY_PATH/api.php"
+  "$DEPLOY_PATH/api.php" \
+  "$MANAGEMENT_PATH/index.html" \
+  "$MANAGEMENT_PATH/zikatec-monochrom-03.png" \
+  "$MANAGEMENT_PATH/.htaccess" \
+  "$MANAGEMENT_PATH/api.php" \
+  "$MANAGEMENT_PATH/assets/"* \
+  "$MANAGEMENT_PATH/fonts/Peyda.ttf" \
+  "$MANAGEMENT_PATH/fonts/PeydaFaNum-Regular.ttf" \
+  "$MANAGEMENT_PATH/fonts/PeydaFaNum-Medium.ttf" \
+  "$MANAGEMENT_PATH/fonts/PeydaFaNum-SemiBold.ttf" \
+  "$CONSULTATION_PATH/index.html" \
+  "$CONSULTATION_PATH/.htaccess" \
+  "$CONSULTATION_PATH/admin.css" \
+  "$CONSULTATION_PATH/admin.js"
+
+/bin/find "$COOLERPAROON_PATH" -type d -exec /bin/chmod 755 {} +
+/bin/find "$COOLERPAROON_PATH" -type f -exec /bin/chmod 644 {} +

@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#181c20" />
+  <meta name="description" content="کولر پرون؛ بازی پرش کولر زیکاتک از روی خارها" />
+  <title>کولر پرون | زیکاتک</title>
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <main class="page">
+    <header class="topbar">
+      <div class="brand" aria-label="لوگوی زیکاتک">
+        <svg viewBox="350 700 3500 2650" role="img" aria-label="ZIKATEC">
+          <image href="./assets/zikatec-logo.png" width="4167" height="4167" />
+        </svg>
+      </div>
+      <button id="accountBtn" type="button" class="account-button">ورود با موبایل</button>
+    </header>
+
+    <section class="hero" aria-labelledby="title">
+      <h1 id="title">کولر <em>پرون</em></h1>
+      <p>از خارها رد شو؛ هر مرحله فرصت پرش کوتاه‌تر و سرعت بیشتر می‌شه.</p>
+    </section>
+
+    <section class="game-shell" aria-label="بازی کولر پرون">
+      <div class="game-toolbar">
+        <div class="scores">
+          <div class="score-box"><span>امتیاز</span><strong id="score">۰۰۰۰۰</strong></div>
+          <span class="score-divider"></span>
+          <div class="score-box"><span>رکورد شخصی</span><strong id="best">۰۰۰۰۰</strong></div>
+        </div>
+        <div class="game-actions">
+          <button id="soundBtn" type="button" class="icon-button" aria-label="قطع صدا" title="صدا"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H3v6h3l5 4V5Z"/><path class="sound-wave" d="M15 9a5 5 0 0 1 0 6M18 6a9 9 0 0 1 0 12"/></svg></button>
+          <button id="pauseBtn" type="button" class="icon-button" aria-label="مکث بازی" title="مکث"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 5v14M16 5v14"/></svg></button>
+        </div>
+      </div>
+
+      <div class="stage" id="stage">
+        <canvas id="game" aria-label="زمین بازی؛ با فاصله یا لمس صفحه بپرید"></canvas>
+        <div class="level-indicator" id="levelIndicator" aria-live="polite"><span class="level-dot"></span><span id="levelText">مرحله ۱</span><span class="level-separator">·</span><span id="speedText">سرعت ۱×</span><span class="level-separator">·</span><span id="timingText">فرصت پرش ۰٫۴۳ ث</span></div>
+        <div class="game-overlay" id="overlay">
+          <div class="overlay-content">
+            <div class="overlay-icon" id="overlayIcon">↥</div>
+            <h2 id="overlayTitle">آماده‌ای بپری؟</h2>
+            <p id="overlayText">با هر ۳ مانع، فرصت پرش ۱۵٪ کمتر می‌شود. فقط خار خطرناک است.</p>
+            <button id="startBtn" type="button" class="primary-button">شروع بازی <span>←</span></button>
+          </div>
+        </div>
+      </div>
+
+      <div class="game-footer">
+        <div class="hint"><kbd>SPACE</kbd><span>یا</span><kbd>↑</kbd><span>برای پرش</span></div>
+        <button id="jumpBtn" type="button" class="jump-button"><span class="jump-arrow">↑</span> بپر!</button>
+        <div class="hint mobile-hint">صفحه را لمس کن تا بپری</div>
+      </div>
+    </section>
+
+    <section class="leaderboard" aria-labelledby="leaderboardTitle">
+      <div class="leaderboard-heading">
+        <h2 id="leaderboardTitle">جدول رکوردها</h2>
+        <span id="leaderboardStatus" aria-live="polite">در حال بارگذاری…</span>
+      </div>
+      <ol id="leaderboardList"></ol>
+    </section>
+
+    <footer class="page-footer"><span>با الهام از بازی دایناسور کروم</span><span class="footer-dot"></span><span>با کولر واقعی زیکاتک</span></footer>
+  </main>
+
+  <div class="auth-backdrop hidden" id="authModal">
+    <section class="auth-card" role="dialog" aria-modal="true" aria-labelledby="authTitle">
+      <button id="authClose" class="auth-close" type="button" aria-label="بستن">×</button>
+      <div class="auth-icon">Z</div>
+      <h2 id="authTitle">ورود به مسابقه</h2>
+      <p id="authDescription">شمارهٔ موبایل را وارد کن تا کد ورود برایت پیامک شود.</p>
+      <form id="authForm">
+        <label for="phoneInput">شمارهٔ موبایل</label>
+        <div class="phone-row">
+          <input id="phoneInput" type="tel" inputmode="tel" autocomplete="tel" placeholder="۰۹۱۲۳۴۵۶۷۸۹" maxlength="18" required />
+          <button id="sendCodeBtn" class="secondary-button" type="button">ارسال کد</button>
+        </div>
+        <label for="codeInput" id="codeLabel" class="hidden">کد شش‌رقمی</label>
+        <input id="codeInput" class="hidden" type="text" inputmode="numeric" autocomplete="one-time-code" placeholder="------" maxlength="6" pattern="[0-9۰-۹٠-٩]{6}" />
+        <p id="authMessage" class="auth-message" role="status" aria-live="polite"></p>
+        <button id="verifyCodeBtn" class="primary-button auth-submit hidden" type="submit">تأیید و ورود</button>
+      </form>
+      <form id="profileForm" class="hidden">
+        <label for="usernameInput">نام نمایشی (اختیاری)</label>
+        <input id="usernameInput" type="text" autocomplete="nickname" maxlength="24" placeholder="نام دلخواه یا نام مهمان" />
+        <p class="profile-hint">اگر نام را خالی بگذاری، نام مهمان خودت نمایش داده می‌شود.</p>
+        <p id="profileMessage" class="auth-message profile-message" role="status" aria-live="polite"></p>
+        <button class="primary-button auth-submit" type="submit">ذخیرهٔ نام</button>
+      </form>
+      <button id="logoutBtn" class="logout-button hidden" type="button">خروج از حساب</button>
+    </section>
+  </div>
+  <script type="module" src="./game.js"></script>
+</body>
+</html>
