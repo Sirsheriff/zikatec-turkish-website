@@ -21,6 +21,7 @@ fi
 "$PHP_BIN" -l ./api.php
 "$PHP_BIN" -l ./systemManagement/api.php
 "$PHP_BIN" -l ./game/coolerparoon/api.php
+"$PHP_BIN" -l ./game/coolerparoon/run-physics.php
 
 /bin/mkdir -p "$DEPLOY_PATH" "$MANAGEMENT_PATH" "$CONSULTATION_PATH" "$PRIVATE_PATH" "$COOLERPAROON_PATH" "$COOLERPAROON_PRIVATE_PATH"
 /bin/chmod 700 "$PRIVATE_PATH" "$COOLERPAROON_PRIVATE_PATH"
@@ -54,6 +55,8 @@ fi
   ./game/coolerparoon/style.css \
   ./game/coolerparoon/game.js \
   ./game/coolerparoon/difficulty.js \
+  ./game/coolerparoon/run-physics.js \
+  ./game/coolerparoon/run-physics.php \
   ./game/coolerparoon/api.php \
   "$COOLERPAROON_PATH/"
 

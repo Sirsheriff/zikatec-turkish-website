@@ -2,12 +2,20 @@ export const STAGE_COUNT = 6;
 export const JUMP_AIRTIME = 2 * 810 / 1950;
 export const BASE_TIMING_WINDOW = .43;
 export const OBSTACLES_PER_STAGE = 3;
+export const START_SPEED = 360;
+export const MAX_SPEED = 840;
+export const MIN_OBSTACLE_INTERVAL_MS = 640;
+const ACCELERATION = 12;
 const JUMP_SPEED = 810;
 const TYPICAL_SPIKE_HEIGHT = 38;
 const TYPICAL_GROUP_WIDTH = 58;
 
 export function stageForScore(score) {
   return Math.min(STAGE_COUNT, 1 + Math.floor(Math.max(0, score) / OBSTACLES_PER_STAGE));
+}
+
+export function runSpeedAt(elapsed) {
+  return Math.min(MAX_SPEED, START_SPEED + elapsed * ACCELERATION);
 }
 
 export function safeJumpDuration(spikeHeight, gravity = 1950) {
@@ -28,22 +36,24 @@ export function gravityForWindow(timingWindow, speed, playerHitWidth = 50) {
   return (low + high) / 2;
 }
 
-export function difficultyAt(score, elapsed, playerHitWidth = 50) {
+export function difficultyAt(score, elapsed, playerHitWidth = 50, speedScale = 1) {
   const stage = stageForScore(score);
   const timingWindow = BASE_TIMING_WINDOW * .85 ** (stage - 1);
-  const speed = 360 + elapsed * 8 + score * 15;
+  const runSpeed = runSpeedAt(elapsed);
+  const speed = runSpeed * speedScale;
   return {
     stage,
     // The launch window is 15% shorter at each successive stage.
     timingWindow,
-    // There is no speed cap, including after stage 6.
+    runSpeed,
     speed,
     gravity: gravityForWindow(timingWindow, speed, playerHitWidth),
   };
 }
 
-export function sampleObstacle(randomCount = Math.random(), randomSize = Math.random()) {
-  const count = randomCount < .5 ? 1 : randomCount < .85 ? 2 : 3;
+export function sampleObstacle(runSpeed, randomCount = Math.random(), randomSize = Math.random()) {
+  const maxCount = runSpeed < 425 ? 1 : runSpeed < 570 ? 2 : 3;
+  const count = Math.min(maxCount, randomCount < .5 ? 1 : randomCount < .85 ? 2 : 3);
   const spikeWidth = 33 + randomSize * 10;
   return {
     w: spikeWidth * (1 + .75 * (count - 1)),
@@ -67,6 +77,7 @@ export function touchesSpikeGroup(obstacle, playerLeft, playerRight, playerRise)
   return false;
 }
 
-export function spawnDelay(random = Math.random()) {
-  return 1.35 + random * .7;
+export function sampleObstacleGap(random = Math.random()) {
+  // Leave room to land between groups, even at top speed.
+  return MAX_SPEED * MIN_OBSTACLE_INTERVAL_MS / 1000 + random * 320;
 }

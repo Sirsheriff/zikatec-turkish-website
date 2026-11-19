@@ -1,4 +1,5 @@
-import { difficultyAt, sampleObstacle, spawnDelay, touchesSpikeGroup } from './difficulty.js';
+import { START_SPEED, BASE_TIMING_WINDOW, runSpeedAt, stageForScore } from './difficulty.js';
+import { createRun, stepRun, TICKS_PER_SECOND } from './run-physics.js';
 
 const canvas = document.querySelector('#game');
 const ctx = canvas.getContext('2d');
@@ -40,8 +41,11 @@ let sessionToken = localStorage.getItem('kolor-session');
 let currentPlayer = null;
 let pendingStart = false;
 let starting = false;
-let runId = '';
-let scoreSubmitted = false;
+let run;
+let simulation;
+let jumps = [];
+let jumpQueued = false;
+let tickBudget = 0;
 let resendTimer;
 let soundOn = true;
 let audioContext;
@@ -50,21 +54,13 @@ let height = 0;
 let ground = 0;
 let lastTime = 0;
 let mode = 'ready';
-let elapsed = 0;
-let distance = 0;
-let score = 0;
-let spawnIn = .86;
-let obstacles = [];
 let particles = [];
-let jumpY = 0;
-let jumpVelocity = 0;
-let activeGravity = 1950;
 let dustClock = 0;
 
 bestEl.textContent = number(best);
 
 function api(path, options = {}) {
-  const headers = { ...(options.body ? { 'Content-Type': 'application/json' } : {}), ...(sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}), ...options.headers };
+  const headers = { 'X-Kolor-Request': '1', ...(options.body ? { 'Content-Type': 'application/json' } : {}), ...(sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}), ...options.headers };
   const endpoint = new URL(path.replace(/^\/+/, ''), new URL('./', document.baseURI));
   return fetch(endpoint, { ...options, headers }).then(async response => {
     const data = await response.json().catch(() => ({}));
@@ -80,9 +76,10 @@ function updateAccount() {
 }
 
 async function refreshProfile() {
-  if (!sessionToken) { currentPlayer = null; updateAccount(); return null; }
   try {
     const result = await api('/api/me');
+    sessionToken = null;
+    localStorage.removeItem('kolor-session');
     currentPlayer = result.player;
     updateAccount();
     return currentPlayer;
@@ -185,9 +182,10 @@ async function requestStart() {
       openAuth();
       return;
     }
-    const run = await api('/api/runs', { method: 'POST' });
+    const gameWidth = Math.max(240, Math.min(1920, Math.round(stage.getBoundingClientRect().width)));
+    const nextRun = await api('/api/runs', { method: 'POST', body: JSON.stringify({ width: gameWidth }) });
     pendingStart = false;
-    start(run.runId);
+    start(nextRun);
   } catch (error) {
     leaderboardStatus.textContent = error.message;
   } finally {
@@ -244,8 +242,8 @@ async function verifyCode(event) {
       method: 'POST',
       body: JSON.stringify({ phone: phoneInput.value, code: normalizeDigits(codeInput.value) }),
     });
-    sessionToken = result.token;
-    localStorage.setItem('kolor-session', sessionToken);
+    sessionToken = null;
+    localStorage.removeItem('kolor-session');
     currentPlayer = result.player;
     updateAccount();
     const shouldStart = pendingStart;
@@ -261,7 +259,13 @@ async function verifyCode(event) {
 }
 
 async function logout() {
-  try { await api('/api/auth/logout', { method: 'POST' }); } catch {}
+  try {
+    await api('/api/auth/logout', { method: 'POST' });
+  } catch (error) {
+    profileMessage.textContent = error.message;
+    profileMessage.classList.add('error');
+    return;
+  }
   sessionToken = null;
   currentPlayer = null;
   localStorage.removeItem('kolor-session');
@@ -296,13 +300,13 @@ async function saveUsername(event) {
 
 function resize() {
   const rect = stage.getBoundingClientRect();
-  width = rect.width;
+  width = simulation?.width ?? rect.width;
   height = rect.height;
   ground = height - 49;
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
-  canvas.width = Math.round(width * dpr);
+  canvas.width = Math.round(rect.width * dpr);
   canvas.height = Math.round(height * dpr);
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.setTransform(width ? dpr * rect.width / width : dpr, 0, 0, dpr, 0, 0);
   draw();
 }
 
@@ -331,19 +335,16 @@ function setOverlay(title, message, button, icon) {
   overlay.classList.remove('hidden');
 }
 
-function start(serverRunId) {
+function start(serverRun) {
   mode = 'playing';
-  elapsed = 0;
-  distance = 0;
-  score = 0;
-  runId = serverRunId;
-  scoreSubmitted = false;
-  spawnIn = spawnDelay();
-  obstacles = [{ x: Math.max(playerX() + 230, width * .62), ...sampleObstacle(), passed: false }];
+  run = serverRun;
+  simulation = createRun(run.seed, run.width);
+  jumps = [];
+  jumpQueued = false;
+  tickBudget = 0;
   particles = [];
-  jumpY = 0;
-  jumpVelocity = 0;
-  activeGravity = 1950;
+  dustClock = 0;
+  resize();
   scoreEl.textContent = number(0);
   levelText.textContent = 'مرحله ۱';
   speedText.textContent = 'سرعت ۱×';
@@ -357,9 +358,8 @@ function start(serverRunId) {
 function jump() {
   if (mode === 'ready' || mode === 'over') { void requestStart(); return; }
   if (mode === 'paused') { togglePause(); return; }
-  if (jumpY > 0 || jumpVelocity !== 0) return;
-  activeGravity = difficultyAt(score, elapsed, playerWidth() - 30).gravity;
-  jumpVelocity = -810;
+  if (simulation.y !== 0 || simulation.velocity !== 0 || jumpQueued) return;
+  jumpQueued = true;
   beep(580, .14, 'triangle', .045);
   for (let i = 0; i < 7; i++) particles.push({ x: playerX() + playerWidth() * .5, y: ground - 4, vx: (Math.random() - .5) * 120, vy: -Math.random() * 75, life: .3 + Math.random() * .2 });
 }
@@ -380,80 +380,58 @@ function togglePause() {
 function finish() {
   mode = 'over';
   beep(200, .36, 'sawtooth', .025);
-  setOverlay('ای وای! به خار خوردی', `امتیاز تو: ${number(score)}  ·  دوباره تلاش کن!`, 'بازی دوباره', '×');
+  setOverlay('دور بازی تمام شد', `امتیاز تو: ${number(simulation.score)}  ·  دوباره تلاش کن!`, 'بازی دوباره', '×');
   void submitScore();
 }
 
 async function submitScore() {
-  if (scoreSubmitted || !runId || !currentPlayer) return;
-  scoreSubmitted = true;
+  if (!currentPlayer) return;
+  const playerId = currentPlayer.id;
   try {
     const result = await api('/api/scores', {
       method: 'POST',
       body: JSON.stringify({
-        runId,
-        score,
-        stage: difficultyAt(score, elapsed).stage,
+        runId: run.runId,
+        endTick: simulation.tick,
+        jumps,
       }),
     });
-    currentPlayer = result.player;
-    updateAccount();
+    if (currentPlayer?.id === playerId) {
+      currentPlayer.bestScore = Math.max(currentPlayer.bestScore, result.player.bestScore);
+      updateAccount();
+    }
     await refreshLeaderboard();
   } catch {
     leaderboardStatus.textContent = 'ذخیرهٔ رکورد انجام نشد';
   }
 }
 
-function playerWidth() { return width < 540 ? 70 : 80; }
+function playerWidth() { return simulation?.playerWidth ?? (width < 540 ? 70 : 80); }
 function playerHeight() { return width < 540 ? 105 : 120; }
-function playerX() { return Math.max(55, Math.min(115, width * .16)); }
-
-function spawnObstacle() {
-  obstacles.push({
-    x: width + 20,
-    ...sampleObstacle(),
-    passed: false,
-  });
-}
+function playerX() { return simulation?.playerX ?? Math.max(55, Math.min(115, width * .16)); }
 
 function update(dt) {
-  elapsed += dt;
-  const difficulty = difficultyAt(score, elapsed, playerWidth() - 30);
-  const speed = difficulty.speed;
-  const nextLevel = `مرحله ${persian(difficulty.stage)}`;
-  const nextSpeed = `سرعت ${persian((speed / 360).toFixed(1))}×`;
-  const nextTiming = `فرصت پرش ${persian(difficulty.timingWindow.toFixed(2)).replace('.', '٫')} ث`;
+  const scoreBefore = simulation.score;
+  if (jumpQueued) jumps.push(simulation.tick + 1);
+  stepRun(simulation, jumpQueued);
+  jumpQueued = false;
+  if (simulation.score !== scoreBefore) {
+    scoreEl.textContent = number(simulation.score);
+    beep(720, .07, 'sine', .018);
+  }
+  if (simulation.ended) { finish(); return; }
+  const stage = stageForScore(simulation.score);
+  const runSpeed = runSpeedAt(simulation.tick / TICKS_PER_SECOND);
+  const speed = runSpeed * simulation.speedScale;
+  const timingWindow = BASE_TIMING_WINDOW * .85 ** (stage - 1);
+  const nextLevel = `مرحله ${persian(stage)}`;
+  const nextSpeed = `سرعت ${persian((runSpeed / START_SPEED).toFixed(1))}×`;
+  const nextTiming = `فرصت پرش ${persian(timingWindow.toFixed(2)).replace('.', '٫')} ث`;
   if (levelText.textContent !== nextLevel) levelText.textContent = nextLevel;
   if (speedText.textContent !== nextSpeed) speedText.textContent = nextSpeed;
   if (timingText.textContent !== nextTiming) timingText.textContent = nextTiming;
-  distance += speed * dt;
-  jumpVelocity += activeGravity * dt;
-  jumpY += jumpVelocity * dt;
-  if (jumpY >= 0) { jumpY = 0; jumpVelocity = 0; }
-
-  spawnIn -= dt;
-  if (spawnIn <= 0) {
-    spawnObstacle();
-    spawnIn = spawnDelay();
-  }
-
-  for (const obstacle of obstacles) {
-    obstacle.x -= speed * dt;
-    if (!obstacle.passed && obstacle.x + obstacle.w < playerX()) {
-      obstacle.passed = true;
-      score++;
-      scoreEl.textContent = number(score);
-      beep(720, .07, 'sine', .018);
-    }
-    const px = playerX() + 15;
-    const pw = playerWidth() - 30;
-    const playerRise = -jumpY + 7;
-    if (touchesSpikeGroup(obstacle, px, px + pw, playerRise)) { finish(); return; }
-  }
-  obstacles = obstacles.filter(obstacle => obstacle.x + obstacle.w > -20);
-
   dustClock -= dt;
-  if (jumpY === 0 && dustClock <= 0) {
+  if (simulation.y === 0 && dustClock <= 0) {
     dustClock = .13;
     particles.push({ x: playerX() + 16, y: ground - 5, vx: -speed * .19, vy: -13 - Math.random() * 20, life: .36 });
   }
@@ -467,6 +445,7 @@ function roundedRect(x, y, w, h, r) {
 }
 
 function drawBackground() {
+  const distance = simulation?.distance ?? 0;
   ctx.fillStyle = '#1d252b';
   ctx.fillRect(0, 0, width, height);
   ctx.strokeStyle = '#35424b';
@@ -493,6 +472,7 @@ function drawBackground() {
 }
 
 function drawCooler() {
+  const jumpY = simulation?.y ?? 0;
   const w = playerWidth();
   const h = playerHeight();
   const x = playerX();
@@ -536,7 +516,7 @@ function drawSpike(x, w, h) {
 }
 
 function drawObstacles() {
-  for (const o of obstacles) {
+  for (const o of simulation?.obstacles ?? []) {
     const spikeWidth = o.w / (1 + .75 * (o.count - 1));
     for (let i = 0; i < o.count; i++) {
       drawSpike(o.x + i * spikeWidth * .75, spikeWidth, o.h);
@@ -562,9 +542,15 @@ function draw() {
 }
 
 function frame(now) {
-  const dt = Math.min((now - lastTime) / 1000 || 0, .04);
+  const dt = Math.max(0, Math.min((now - lastTime) / 1000 || 0, .04));
   lastTime = now;
-  if (mode === 'playing') update(dt);
+  if (mode === 'playing') {
+    tickBudget += dt * TICKS_PER_SECOND;
+    while (tickBudget >= 1 && mode === 'playing') {
+      tickBudget--;
+      update(1 / TICKS_PER_SECOND);
+    }
+  }
   draw();
   requestAnimationFrame(frame);
 }
@@ -582,6 +568,10 @@ soundBtn.addEventListener('click', () => {
   soundBtn.setAttribute('aria-label', soundOn ? 'قطع صدا' : 'وصل صدا');
 });
 document.addEventListener('keydown', event => {
+  if (!authModal.classList.contains('hidden')) {
+    if (event.code === 'Escape') { event.preventDefault(); closeAuth(); }
+    return;
+  }
   if (['Space', 'ArrowUp', 'KeyW'].includes(event.code)) { event.preventDefault(); if (!event.repeat) jump(); }
   if (event.code === 'KeyP' || event.code === 'Escape') { event.preventDefault(); togglePause(); }
   if (event.code === 'KeyR') { event.preventDefault(); void requestStart(); }

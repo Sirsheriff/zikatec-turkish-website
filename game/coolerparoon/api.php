@@ -1,6 +1,8 @@
 <?php
 declare(strict_types=1);
 
+require __DIR__ . '/run-physics.php';
+
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
 header('X-Content-Type-Options: nosniff');
@@ -14,6 +16,14 @@ try {
     if (!is_dir($privateDir) && !mkdir($privateDir, 0700, true) && !is_dir($privateDir)) {
         throw new RuntimeException('Private storage is unavailable.');
     }
+    $documentRoot = realpath((string)($_SERVER['DOCUMENT_ROOT'] ?? ''));
+    $storageRoot = realpath($privateDir);
+    if ($documentRoot === false || $storageRoot === false ||
+        $storageRoot === $documentRoot || str_starts_with($storageRoot, rtrim($documentRoot, '/') . '/')) {
+        throw new RuntimeException('Private storage must be outside the document root.');
+    }
+    $privateDir = $storageRoot;
+    $configPath = $privateDir . '/config.php';
     @chmod($privateDir, 0700);
 
     $secretPath = $privateDir . '/auth.secret';
@@ -45,6 +55,9 @@ try {
     }
 
     $method = strtoupper($_SERVER['REQUEST_METHOD'] ?? 'GET');
+    if ($method !== 'GET' && cookieToken() !== null && ($_SERVER['HTTP_X_KOLOR_REQUEST'] ?? '') !== '1') {
+        respond(403, ['error' => 'درخواست معتبر نیست.']);
+    }
     $route = trim((string)($_GET['path'] ?? ''), '/');
 
     if ($method === 'POST' && $route === 'auth/request-code') {
@@ -88,7 +101,8 @@ try {
             withStore(function (&$state) use ($phoneHash): void {
                 unset($state['otps'][$phoneHash]);
             });
-            respond(502, ['error' => 'ارسال پیامک انجام نشد. پاسخ SMS.ir: ' . $reason]);
+            error_log('SMS.ir verification request failed: ' . $reason);
+            respond(502, ['error' => 'ارسال پیامک انجام نشد. کمی بعد دوباره تلاش کنید.']);
         }
         respond(200, ['message' => 'کد تأیید تا ۵ دقیقه معتبر است.', 'expiresIn' => 300]);
     }
@@ -96,13 +110,17 @@ try {
     if ($method === 'POST' && $route === 'auth/verify-code') {
         $body = readJsonBody();
         $mobile = normalizePhone($body['phone'] ?? '');
-        $code = trim((string)($body['code'] ?? ''));
+        $code = is_string($body['code'] ?? null) ? trim($body['code']) : '';
         if ($mobile === null || !preg_match('/^\d{6}$/', $code)) {
             respond(400, ['error' => 'شماره یا کد تأیید معتبر نیست.']);
         }
         $phoneHash = hmacValue('phone:' . $mobile);
-        $result = withStore(function (&$state) use ($phoneHash, $code): array {
+        $remoteAddress = (string)($_SERVER['REMOTE_ADDR'] ?? 'unknown');
+        $result = withStore(function (&$state) use ($phoneHash, $code, $remoteAddress): array {
             pruneState($state);
+            if (!allowRate($state, 'verify:' . $remoteAddress, 40, 600000)) {
+                return ['status' => 429, 'error' => 'برای تلاش دوباره کمی صبر کنید.'];
+            }
             $challenge = $state['otps'][$phoneHash] ?? null;
             if (!$challenge || $challenge['expires_at'] < nowMs() || $challenge['attempts'] >= 5) {
                 unset($state['otps'][$phoneHash]);
@@ -148,30 +166,34 @@ try {
         if ($result['status'] !== 200) {
             respond($result['status'], ['error' => $result['error']]);
         }
-        respond(200, ['token' => $result['token'], 'player' => $result['player']]);
+        setSessionCookie($result['token'], time() + 30 * 24 * 60 * 60);
+        respond(200, ['player' => $result['player']]);
     }
 
     if ($method === 'POST' && $route === 'auth/logout') {
-        $token = bearerToken();
+        $token = sessionToken();
         if ($token !== null) {
             $tokenHash = hash('sha256', $token);
             withStore(function (&$state) use ($tokenHash): void {
                 unset($state['sessions'][$tokenHash]);
             });
         }
+        setSessionCookie('', 1);
         respond(200, ['ok' => true]);
     }
 
     if ($method === 'GET' && $route === 'me') {
         $result = withStore(function (&$state): array {
-            pruneState($state);
             $player = authenticatedPlayer($state);
             return $player === null
                 ? ['status' => 401, 'error' => 'برای ادامه وارد حساب شوید.']
                 : ['status' => 200, 'player' => playerView($player)];
-        });
+        }, false);
         if ($result['status'] !== 200) {
             respond($result['status'], ['error' => $result['error']]);
+        }
+        if (cookieToken() === null) {
+            setSessionCookie(sessionToken(), time() + 30 * 24 * 60 * 60);
         }
         respond(200, ['player' => $result['player']]);
     }
@@ -184,8 +206,11 @@ try {
             if ($player === null) {
                 return ['status' => 401, 'error' => 'برای ادامه وارد حساب شوید.'];
             }
+            if (!is_string($body['username'] ?? null)) {
+                return ['status' => 400, 'error' => 'نام معتبر نیست.'];
+            }
             try {
-                $username = normalizeUsername($body['username'] ?? null, (string)$player['guest_name']);
+                $username = normalizeUsername($body['username'], (string)$player['guest_name']);
             } catch (InvalidArgumentException $error) {
                 return ['status' => 400, 'error' => $error->getMessage()];
             }
@@ -200,19 +225,26 @@ try {
 
     if ($method === 'GET' && $route === 'leaderboard') {
         $players = withStore(function (&$state): array {
-            pruneState($state);
             $players = array_values(array_filter($state['players'], static fn(array $player): bool => (int)$player['best_score'] > 0));
             usort($players, static function (array $a, array $b): int {
                 $scoreOrder = (int)$b['best_score'] <=> (int)$a['best_score'];
                 return $scoreOrder !== 0 ? $scoreOrder : (int)$a['created_at'] <=> (int)$b['created_at'];
-            });
-            return array_map('playerView', array_slice($players, 0, 10));
+            }, false);
+            return array_map(static fn(array $player): array => [
+                'username' => (string)$player['username'],
+                'bestScore' => (int)$player['best_score'],
+            ], array_slice($players, 0, 10));
         });
         respond(200, ['players' => $players]);
     }
 
     if ($method === 'POST' && $route === 'runs') {
-        $result = withStore(function (&$state): array {
+        $body = readJsonBody();
+        $width = $body['width'] ?? null;
+        if (!is_int($width) || $width < 240 || $width > 1920) {
+            respond(400, ['error' => 'عرض میدان بازی معتبر نیست.']);
+        }
+        $result = withStore(function (&$state) use ($width): array {
             pruneState($state);
             $player = authenticatedPlayer($state);
             if ($player === null) {
@@ -222,42 +254,43 @@ try {
                 return ['status' => 429, 'error' => 'تعداد دورهای شروع‌شده زیاد است؛ کمی بعد دوباره تلاش کنید.'];
             }
             $runId = uuidV4();
-            $state['runs'][$runId] = ['player_id' => $player['id'], 'started_at' => nowMs()];
-            return ['status' => 201, 'runId' => $runId];
+            $seed = random_int(1, 2147483646);
+            $state['runs'][$runId] = [
+                'player_id' => $player['id'], 'started_at' => nowMs(), 'seed' => $seed, 'width' => $width,
+            ];
+            return ['status' => 201, 'runId' => $runId, 'seed' => $seed, 'width' => $width];
         });
         if ($result['status'] !== 201) {
             respond($result['status'], ['error' => $result['error']]);
         }
-        respond(201, ['runId' => $result['runId']]);
+        respond(201, ['runId' => $result['runId'], 'seed' => $result['seed'], 'width' => $result['width']]);
     }
 
     if ($method === 'POST' && $route === 'scores') {
-        $body = readJsonBody();
+        $body = readJsonBody(65536);
         $result = withStore(function (&$state) use ($body): array {
             pruneState($state);
             $player = authenticatedPlayer($state);
             if ($player === null) {
                 return ['status' => 401, 'error' => 'نشست شما منقضی شده است؛ دوباره وارد شوید.'];
             }
-            $score = $body['score'] ?? null;
-            $stage = $body['stage'] ?? null;
-            $runId = (string)($body['runId'] ?? '');
-            $expectedStage = is_int($score) ? min(6, 1 + intdiv(max(0, $score), 3)) : 0;
-            if (!is_int($score) || $score < 0 || $score > 1000000 ||
-                !is_int($stage) || $stage !== $expectedStage ||
+            $runId = $body['runId'] ?? null;
+            $endTick = $body['endTick'] ?? null;
+            $jumps = $body['jumps'] ?? null;
+            if (!is_int($endTick) || !is_array($jumps) || !is_string($runId) ||
                 !preg_match('/^[0-9a-f-]{36}$/i', $runId)) {
                 return ['status' => 400, 'error' => 'اطلاعات رکورد معتبر نیست.'];
             }
             $run = $state['runs'][$runId] ?? null;
-            if (!$run || $run['player_id'] !== $player['id']) {
+            if (!$run || $run['player_id'] !== $player['id'] || !isset($run['seed'], $run['width'])) {
                 return ['status' => 400, 'error' => 'دور بازی معتبر نیست.'];
             }
-            $durationMs = max(0, nowMs() - (int)$run['started_at']);
-            $maximumPlausibleScore = (int)floor($durationMs / 1350) + 2;
-            if ($score > $maximumPlausibleScore) {
-                return ['status' => 400, 'error' => 'این امتیاز با مدت دور بازی سازگار نیست.'];
-            }
+            $durationMs = nowMs() - (int)$run['started_at'];
+            $score = verifyRun($run, $endTick, $jumps, $durationMs);
             unset($state['runs'][$runId]);
+            if ($score === null) {
+                return ['status' => 400, 'error' => 'ورودی‌های این دور با نتیجهٔ بازی سازگار نیست.'];
+            }
             $state['players'][$player['id']]['best_score'] = max((int)$player['best_score'], $score);
             return ['status' => 201, 'player' => playerView($state['players'][$player['id']])];
         });
@@ -307,7 +340,7 @@ function hmacValue(string $value): string
 
 function normalizePhone(mixed $value): ?string
 {
-    if (!is_scalar($value)) {
+    if (!is_string($value)) {
         return null;
     }
     $digits = strtr(trim((string)$value), [
@@ -329,21 +362,25 @@ function normalizePhone(mixed $value): ?string
     return null;
 }
 
-function readJsonBody(): array
+function readJsonBody(int $maximum = 8192): array
 {
-    $input = file_get_contents('php://input', false, null, 0, 8193);
-    if ($input === false || strlen($input) > 8192) {
+    $contentType = strtolower(trim(explode(';', (string)($_SERVER['CONTENT_TYPE'] ?? ''), 2)[0]));
+    if ($contentType !== 'application/json') {
+        respond(415, ['error' => 'نوع درخواست معتبر نیست.']);
+    }
+    $input = file_get_contents('php://input', false, null, 0, $maximum + 1);
+    if ($input === false || strlen($input) > $maximum) {
         respond(413, ['error' => 'درخواست بیش از حد بزرگ است.']);
     }
     try {
-        $body = json_decode($input === '' ? '{}' : $input, true, 32, JSON_THROW_ON_ERROR);
+        $body = json_decode($input, false, 32, JSON_THROW_ON_ERROR);
     } catch (JsonException) {
         respond(400, ['error' => 'درخواست قابل خواندن نیست.']);
     }
-    if (!is_array($body)) {
+    if (!$body instanceof stdClass) {
         respond(400, ['error' => 'درخواست قابل خواندن نیست.']);
     }
-    return $body;
+    return (array)$body;
 }
 
 function initialState(): array
@@ -351,11 +388,11 @@ function initialState(): array
     return ['next_guest' => 52163, 'players' => [], 'otps' => [], 'sessions' => [], 'runs' => [], 'limits' => []];
 }
 
-function withStore(callable $callback): mixed
+function withStore(callable $callback, bool $write = true): mixed
 {
     global $privateDir;
     $lock = fopen($privateDir . '/state.lock', 'c');
-    if ($lock === false || !flock($lock, LOCK_EX)) {
+    if ($lock === false || !flock($lock, $write ? LOCK_EX : LOCK_SH)) {
         throw new RuntimeException('Private storage is unavailable.');
     }
     @chmod($privateDir . '/state.lock', 0600);
@@ -372,17 +409,24 @@ function withStore(callable $callback): mixed
         }
 
         $result = $callback($state);
+        if (!$write) {
+            return $result;
+        }
         $encoded = json_encode($state, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
         $temporaryPath = $privateDir . '/state.' . bin2hex(random_bytes(6)) . '.tmp';
-        if (file_put_contents($temporaryPath, $encoded, LOCK_EX) === false) {
-            throw new RuntimeException('Private storage could not be written.');
+        try {
+            if (file_put_contents($temporaryPath, $encoded, LOCK_EX) !== strlen($encoded)) {
+                throw new RuntimeException('Private storage could not be written.');
+            }
+            @chmod($temporaryPath, 0600);
+            if (!rename($temporaryPath, $statePath)) {
+                throw new RuntimeException('Private storage could not be updated.');
+            }
+        } finally {
+            if (is_file($temporaryPath)) {
+                @unlink($temporaryPath);
+            }
         }
-        @chmod($temporaryPath, 0600);
-        if (!rename($temporaryPath, $statePath)) {
-            @unlink($temporaryPath);
-            throw new RuntimeException('Private storage could not be updated.');
-        }
-        @chmod($statePath, 0600);
         return $result;
     } finally {
         flock($lock, LOCK_UN);
@@ -404,7 +448,7 @@ function pruneState(array &$state): void
         }
     }
     foreach ($state['runs'] as $key => $run) {
-        if ($now - (int)$run['started_at'] > 3600000) {
+        if ($now - (int)$run['started_at'] >= RUN_LIFETIME_MS || !isset($run['seed'], $run['width'])) {
             unset($state['runs'][$key]);
         }
     }
@@ -433,15 +477,30 @@ function allowRate(array &$state, string $key, int $maximum, int $intervalMs, in
     return true;
 }
 
-function bearerToken(): ?string
+function cookieToken(): ?string
+{
+    $token = $_COOKIE['kolor_session'] ?? null;
+    return is_string($token) && preg_match('/^[A-Za-z0-9_-]{40,100}$/D', $token) ? $token : null;
+}
+
+function sessionToken(): ?string
 {
     $authorization = (string)($_SERVER['HTTP_AUTHORIZATION'] ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '');
-    return preg_match('/^Bearer ([A-Za-z0-9_-]{40,100})$/', $authorization, $match) ? $match[1] : null;
+    return cookieToken() ?? (preg_match('/^Bearer ([A-Za-z0-9_-]{40,100})$/D', $authorization, $match) ? $match[1] : null);
+}
+
+function setSessionCookie(string $token, int $expires): void
+{
+    $path = rtrim(dirname((string)($_SERVER['SCRIPT_NAME'] ?? '/api.php')), '/') . '/';
+    setcookie('kolor_session', $token, [
+        'expires' => $expires, 'path' => $path, 'secure' => true,
+        'httponly' => true, 'samesite' => 'Strict',
+    ]);
 }
 
 function authenticatedPlayer(array $state): ?array
 {
-    $token = bearerToken();
+    $token = sessionToken();
     if ($token === null) {
         return null;
     }
@@ -514,6 +573,7 @@ function sendSmsOtp(string $mobile, string $code, string $apiKey, int $templateI
                 'content' => $payload,
                 'timeout' => 12,
                 'ignore_errors' => true,
+                'follow_location' => 0,
             ],
             'ssl' => ['verify_peer' => true, 'verify_peer_name' => true],
         ]);
